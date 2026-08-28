@@ -32,7 +32,7 @@
 
 ## 📸 界面预览
 
-> 将截图放入仓库 `docs/` 目录后替换下方路径。
+> docs/111.png docs/222.png docs/333.png docs/444.png
 
 <p align="center">
   <img src="docs/screenshot-settings.png" width="720" alt="DSH 设置页 - RSS 监控"/>
