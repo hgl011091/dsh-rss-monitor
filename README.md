@@ -32,8 +32,12 @@
 
 ## 📸 界面预览
 
-> docs/111.png docs/222.png docs/333.png docs/444.png
+> ## 📸 界面预览
 
+![截图1](docs/111.png)
+![截图2](docs/222.png)
+![截图3](docs/333.png)
+![截图4](docs/444.png)
 <p align="center">
   <img src="docs/screenshot-settings.png" width="720" alt="DSH 设置页 - RSS 监控"/>
 </p>
