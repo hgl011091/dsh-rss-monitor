@@ -35,15 +35,15 @@
 
 <table>
   <tr>
-    <td><img src="docs/111.png" width="250" /></td>
-    <td><img src="docs/222.png" width="250" /></td>
-    <td><img src="docs/333.png" width="250" /></td>
-    <td><img src="docs/444.png" width="250" /></td>
+    <td><img src="docs/111.png" width="400" /></td>
+    <td><img src="docs/222.png" width="400" /></td>
+  </tr>
+  <tr>
+    <td><img src="docs/333.png" width="400" /></td>
+    <td><img src="docs/444.png" width="400" /></td>
   </tr>
 </table>
-<p align="center">
-  <img src="docs/screenshot-settings.png" width="720" alt="DSH 设置页 - RSS 监控"/>
-</p>
+
 
 ## 📦 安装
 
