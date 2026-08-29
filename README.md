@@ -70,8 +70,8 @@
 前提：包已发布到 npm（发布步骤见 [PUBLISH.md](PUBLISH.md)）。
 
 ```bash
-# DSH Desktop
-dsh plugin --profile desktop add -w dsh-rss-monitor
+# DSH Desktop（务必带 @精确版本 + --save-exact，见下方 ⚠）
+dsh plugin --profile desktop add -wE "dsh-rss-monitor@0.1.0"
 
 # DSH Web
 dsh plugin --profile web add dsh-rss-monitor
@@ -79,13 +79,18 @@ dsh plugin --profile web add dsh-rss-monitor
 
 完成后启动 DSH Desktop（或刷新 `dsh web` 页面），设置 → 「RSS 监控」。
 
+> ⚠️ **Desktop 专有坑：依赖必须是精确版本。** 桌面端的 bundle 加载器只解析 `dsh.profile.bundles` 中**精确版本**的 profile 依赖；pnpm 默认写入的 `^0.1.0` 范围值会被**静默跳过**——装完、重启都不生效，且无任何报错。所以：
+> 1. 安装时带 `@0.1.0` 并加 `-E`（`--save-exact`）；
+> 2. 装完自检：打开 `%USERPROFILE%\.dsh\profiles\desktop\package.json`，`dependencies` 里应是 `"dsh-rss-monitor": "0.1.0"`（**没有** `^`），且 `dsh.profile.bundles` 数组里含 `"dsh-rss-monitor"`；
+> 3. 若版本带 `^`，用 `pnpm remove -w dsh-rss-monitor` 再 `pnpm add -wE "dsh-rss-monitor@0.1.0"` 重装（需先完全退出 DSH）。
+
 ### 方式二：GitHub 源安装（需直连 GitHub）
 
 ```bash
 dsh plugin --profile desktop add -w github:hgl011091/dsh-rss-monitor
 ```
 
-原理：pnpm 从 `codeload.github.com` 拉取源码 tarball。**中国大陆网络实测连不通 codeload（连接被重置）**——会卡在 fetch 超时或直接失败，届时请改用方式一或方式四。
+原理：pnpm 从 `codeload.github.com` 拉取源码 tarball。**中国大陆网络实测连不通 codeload（连接被重置）**——会卡在 fetch 超时或直接失败，届时请改用方式一或方式四。装完请按方式一的 ⚠ 自检 manifest（Desktop 只认精确版本/路径型 spec）。
 
 ### 方式三：GitHub Release 预构建 tarball
 
@@ -93,7 +98,7 @@ dsh plugin --profile desktop add -w github:hgl011091/dsh-rss-monitor
 dsh plugin --profile desktop add -w "https://github.com/hgl011091/dsh-rss-monitor/releases/latest/download/dsh-rss-monitor.tgz"
 ```
 
-Release 资产在国内的可达性通常好于 codeload，但同样不保证。
+Release 资产在国内的可达性通常好于 codeload，但同样不保证。装完请按方式一的 ⚠ 自检 manifest（Desktop 只认精确版本/路径型 spec）。
 
 ### 方式四：本地克隆 + link（离线 / 开发联动 / 发布前兜底）
 
