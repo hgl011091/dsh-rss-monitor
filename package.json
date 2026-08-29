@@ -19,10 +19,10 @@
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/example/dsh-rss-monitor.git"
+    "url": "git+https://github.com/hgl011091/dsh-rss-monitor.git"
   },
-  "homepage": "https://github.com/example/dsh-rss-monitor#readme",
-  "bugs": "https://github.com/example/dsh-rss-monitor/issues",
+  "homepage": "https://github.com/hgl011091/dsh-rss-monitor#readme",
+  "bugs": "https://github.com/hgl011091/dsh-rss-monitor/issues",
   "main": "./lib/index.js",
   "exports": {
     ".": "./lib/index.js",

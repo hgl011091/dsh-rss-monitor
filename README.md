@@ -47,24 +47,122 @@
 
 ## 📦 安装
 
-**方式一：dsh 命令（推荐）**
+> **先选对你的客户端。** DSH 有两种发行版：
+>
+> | 客户端 | 长什么样 | 插件如何被发现 |
+> |---|---|---|
+> | **DSH Web**（`dsh web`，Node 包） | 浏览器打开 `localhost:9191` | 启动时读 `profile/package.json` 的 `dependencies`，pnpm 装好即可用 |
+> | **DSH Desktop**（`DSH Desktop.exe`，Electron 桌面端） | 系统托盘的窗口 | `deepseek-harness-zh_pro` 的 hot-mount 监督器监听 `package.json` 变化，产生"新增"事件后挂载 |
+>
+> 两种客户端都提供官方 `dsh plugin` 命令（Desktop 上是 `desktop-cli.js`，内部把参数转发给 profile 目录里的 pnpm）。**安装前先完全退出 DSH Desktop**（托盘 → 退出）——Windows 上 DSH 运行时持有的文件锁会让 pnpm 改名失败。
+
+**选哪条路径：**
+
+| 你的情况 | 路径 | 网络要求 |
+|---|---|---|
+| 本包已发布 npm（v0.1.0 起），任何网络 | **方式一**（推荐） | npm registry（国内可达） |
+| 能直连 GitHub（境外/有代理） | 方式二 | codeload.github.com |
+| 想用预构建包、不想等 npm | 方式三 | github.com Releases |
+| 离线 / 开发联动 / 发布前的兜底 | 方式四 | 无（本地 clone） |
+
+### 方式一：npm 安装（推荐；Web / Desktop 通用）
+
+前提：包已发布到 npm（发布步骤见 [PUBLISH.md](PUBLISH.md)）。
 
 ```bash
-dsh plugin --profile desktop add -w /path/to/dsh-rss-monitor
+# DSH Desktop
+dsh plugin --profile desktop add -w dsh-rss-monitor
+
+# DSH Web
+dsh plugin --profile web add dsh-rss-monitor
 ```
 
-**方式二：手动安装**
+完成后启动 DSH Desktop（或刷新 `dsh web` 页面），设置 → 「RSS 监控」。
 
-把插件文件夹（至少含 `lib/`、`package.json`、`cordis.patch.yml`，构建产物已自包含）放入或链接到 profile 的包目录：
+### 方式二：GitHub 源安装（需直连 GitHub）
+
+```bash
+dsh plugin --profile desktop add -w github:hgl011091/dsh-rss-monitor
+```
+
+原理：pnpm 从 `codeload.github.com` 拉取源码 tarball。**中国大陆网络实测连不通 codeload（连接被重置）**——会卡在 fetch 超时或直接失败，届时请改用方式一或方式四。
+
+### 方式三：GitHub Release 预构建 tarball
+
+```bash
+dsh plugin --profile desktop add -w "https://github.com/hgl011091/dsh-rss-monitor/releases/latest/download/dsh-rss-monitor.tgz"
+```
+
+Release 资产在国内的可达性通常好于 codeload，但同样不保证。
+
+### 方式四：本地克隆 + link（离线 / 开发联动 / 发布前兜底）
 
 ```powershell
-# Windows 开发联动（junction，无需管理员）
-New-Item -ItemType Junction `
-  -Path "$env:USERPROFILE\.dsh\profiles\desktop\node_modules\dsh-rss-monitor" `
-  -Target "D:\path\to\dsh-rss-monitor"
+# 1. 克隆（目录随意；lib/ 构建产物已自包含，无需 npm install）
+git clone https://github.com/hgl011091/dsh-rss-monitor.git D:\plugins\dsh-rss-monitor
+
+# 2. 完全退出 DSH Desktop（系统托盘 → 退出；或任务管理器结束所有 DSH Desktop.exe）
+
+# 3. 官方 CLI 安装（内部转发给 profile 里的 pnpm，自动建 junction + 写 manifest）
+dsh plugin --profile desktop add -w "link:D:\plugins\dsh-rss-monitor"
+
+# 4. 启动 DSH Desktop → 设置 → 「RSS 监控」
 ```
 
-重启 Harness Desktop 后，「设置」中即出现「RSS 监控」。
+升级与卸载：
+
+```powershell
+# 升级（拉新代码后重启 DSH Desktop 即可，junction 指向的是目录本身）
+git -C D:\plugins\dsh-rss-monitor pull
+
+# 卸载
+dsh plugin --profile desktop remove dsh-rss-monitor
+```
+
+自动化脚本（做齐健康检查 + 清残留 + 退出 DSH + 安装）：
+
+```powershell
+irm https://raw.githubusercontent.com/hgl011091/dsh-rss-monitor/main/install-dsh-desktop.ps1 -OutFile install.ps1
+.\install.ps1 -PluginPath D:\plugins\dsh-rss-monitor
+```
+
+> ⚠️ **三条实测教训（都踩过）：**
+>
+> 1. **占位路径必须替换。** 照抄 `/path/to/...` 的话，pnpm 解析失败**也会把依赖写进** profile 的 `package.json`（pnpm 在完成前就落盘），留下 `link:/path/to/...` 幽灵条目——市场里显示「已安装，未生效」的就是它。清掉方法：`dsh plugin --profile desktop remove dsh-rss-monitor` 或手工删掉那一行。
+> 2. **脚本改 `package.json` 必须用 `-Encoding utf8NoBOM`。** Windows PowerShell 5.1 的 `-Encoding UTF8` 写出带 BOM 的文件，DSH 的 `JSON.parse` 直接拒绝 → **DSH Desktop 整个无法启动**（报 `Unexpected token '﻿'`）。最好根本别手工改 manifest，交给 pnpm。
+> 3. **只建 junction 不够。** 不改 manifest、不产生"新增"事件，DSH 的 hot-mount 监督器不会挂载它——必须走 `dsh plugin add` / `pnpm add`。
+
+#### 故障排查：设置页没有「RSS 监控」
+
+```powershell
+# 1. 看 DSH Desktop 是否真加载了 host 端
+Get-Content "$env:APPDATA\DSH Desktop\logs\dsh-$(Get-Date -Format yyyy-MM-dd).log" |
+  Select-String "dsh-rss-monitor" | Select-Object -Last 5
+# 期望看到 [dsh-rss-monitor-host] monitor restored, interval 5 min
+# → 有 = host 正常；没 = junction 没建好，回到第二步
+
+# 2. 看 DSH profile manifest 是不是真的记录了 rss-monitor
+Get-Content "$env:USERPROFILE\.dsh\profiles\desktop\package.json" -Raw |
+  ConvertFrom-Json | Select-Object -ExpandProperty dependencies
+# 期望看到 dsh-rss-monitor: link:D:\plugins\dsh-rss-monitor
+
+# 3. 看 cordis.yml 有没有 include 它
+Get-Content "$env:USERPROFILE\.dsh\profiles\desktop\cordis.yml" -Raw
+# 应该是带 - id: dsh-rss-monitor 的列表；空就说明 hot-mount 监督器没跑（或之前 boot 失败过）
+# 手动补一条也行（DSH 下次启动会合并进 bundle）：
+@'
+- insert:
+    - id: dsh-rss-monitor
+      name: dsh-rss-monitor
+'@ | Set-Content "$env:USERPROFILE\.dsh\profiles\desktop\cordis.patch.yml" -Encoding utf8NoBOM
+# 然后再次重启 DSH Desktop
+```
+
+### 插件收录（作者一次性的工作）
+
+让「插件市场」（dshmarket）能搜到并一键安装本插件：向 [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) 提 PR 新增 `data/plugins/hgl011091__dsh-rss-monitor.yml`（模板已备好：[awesome-dsh-plugin-entry.yml](awesome-dsh-plugin-entry.yml)），完整步骤与检查清单见 [PUBLISH.md](PUBLISH.md)。
+
+注意：**DSH Desktop 的市场安装边界只接受 npm 包**（GitHub-only 插件在市场 UI 里会被拒装）——所以「发布到 npm」是桌面用户一键安装的前提；未发布 npm 时桌面用户请走方式四。
 
 > 插件数据存放在 `DSH_HOME/integrations/dsh-rss-monitor/`（`config.json` + `state.json`，临时文件 + rename 原子写入、owner-only 权限）。数据每台机器独立，不随插件目录迁移。
 
