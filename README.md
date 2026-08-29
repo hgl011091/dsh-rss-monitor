@@ -51,10 +51,12 @@
 >
 > | 客户端 | 长什么样 | 插件如何被发现 |
 > |---|---|---|
-> | **DSH Web**（`dsh web`，Node 包） | 浏览器打开 `localhost:9191` | 启动时读 `profile/package.json` 的 `dependencies`，pnpm 装好即可用 |
-> | **DSH Desktop**（`DSH Desktop.exe`，Electron 桌面端） | 系统托盘的窗口 | `deepseek-harness-zh_pro` 的 hot-mount 监督器监听 `package.json` 变化，产生"新增"事件后挂载 |
+> | **DSH Web**（`dsh web`，Node 包） | 浏览器打开 `localhost:9191` | 启动时官方 boot 组合自动发现已安装的 `dsh.bundle` 插件 |
+> | **DSH Desktop**（`DSH Desktop.exe`，Electron 桌面端） | 系统托盘的窗口 | 重启时官方 boot 组合 + 内置 `dshmarket` 的 shim-mount 完成发现 |
 >
 > 两种客户端都提供官方 `dsh plugin` 命令（Desktop 上是 `desktop-cli.js`，内部把参数转发给 profile 目录里的 pnpm）。**安装前先完全退出 DSH Desktop**（托盘 → 退出）——Windows 上 DSH 运行时持有的文件锁会让 pnpm 改名失败。
+>
+> ℹ️ **不需要 `deepseek-harness-zh_pro`。** 它的 hot-mount 监督器只是"装完免重启、1 秒热挂载"的便利层；没有它，四种方式装的插件重启一次 DSH 照样激活。若极老版本桌面端连 `dshmarket` 都没有，见下方故障排查的 `cordis.patch.yml` 兜底。
 
 **选哪条路径：**
 
