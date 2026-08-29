@@ -10,9 +10,8 @@
       1. Clones the repo to a stable location (D:\plugins\dsh-rss-monitor by default)
       2. Cleans any previous partial install (stale junction, stale dependency entry)
       3. Quits any running DSH Desktop processes
-      4. Runs `pnpm add link:...` in the desktop profile so the hot-mount
-         supervisor (`deepseek-harness-zh_pro`) sees the new dependency on
-         next launch
+      4. Runs `pnpm add link:...` in the desktop profile so the official
+         boot-time discovery sees the new dependency on next launch
       5. Optionally launches DSH Desktop
 
     After running this, restart DSH Desktop. Settings should show a new
