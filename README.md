@@ -116,10 +116,6 @@ npm test        # 仅跑测试（node:test）
 
 > 修改 Host 侧代码需重启 Harness Desktop；仅客户端改动硬刷新设置页即可。
 
-## 🔗 相关项目
-
-- **[rss-video-monitor](https://github.com/<你的用户名>/rss-video-monitor)** —— 同一套功能的 **Electron 独立桌面版**：不依赖 Harness，开箱即用的独立窗口应用（每 5 分钟检查、邮件通知、系统托盘）。
-
 ## 📄 License
 
 [MIT](LICENSE)
