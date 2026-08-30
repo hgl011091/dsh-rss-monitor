@@ -194,20 +194,22 @@ function OverviewPanel({ status }) {
         h('span', { className: 'drss-muted' }, `${recent.length} ${tr('条')}`)),
       recent.length === 0
         ? h('p', { className: 'drss-empty' }, tr('暂无新条目'))
-        : recent.map((item) => h(ItemCard, { key: item.id, item }))),
+        : h('div', { className: 'drss-twoCol' },
+          recent.map((item) => h(ItemCard, { key: item.id, item })))),
     h('section', { key: 'history', className: 'drss-section' },
       h('div', { className: 'drss-panelHeading' },
         h('h3', null, tr('检查历史'))),
       history.length === 0
         ? h('p', { className: 'drss-empty' }, tr('暂无历史记录'))
-        : history.map((entry, index) => h('div', { key: entry.timestamp ?? index, className: 'drss-historyRow' },
-          h('span', { className: 'drss-historyTime' }, formatTime(entry.timestamp)),
-          h('span', { className: 'drss-historyBadge' }, entry.manual ? tr('手动') : tr('自动')),
-          h('span', { className: 'drss-historyCount' }, `+${entry.newCount ?? 0} ${tr('新条目')}`),
-          entry.errors?.length
-            ? h('span', { className: 'drss-historyError' },
-              entry.errors.map((err) => `${err.feed}: ${err.error}`).join('；'))
-            : null))),
+        : h('div', { className: 'drss-twoCol' },
+          history.map((entry, index) => h('div', { key: entry.timestamp ?? index, className: 'drss-historyRow' },
+            h('span', { className: 'drss-historyTime' }, formatTime(entry.timestamp)),
+            h('span', { className: 'drss-historyBadge' }, entry.manual ? tr('手动') : tr('自动')),
+            h('span', { className: 'drss-historyCount' }, `+${entry.newCount ?? 0} ${tr('新条目')}`),
+            entry.errors?.length
+              ? h('span', { className: 'drss-historyError' },
+                entry.errors.map((err) => `${err.feed}: ${err.error}`).join('；'))
+              : null)))),
   ];
 }
 

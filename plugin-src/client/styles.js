@@ -103,6 +103,11 @@ const CSS = String.raw`
 .drss-historyCount { color: var(--drss-green); font-weight: 620; }
 .drss-historyError { min-width: 0; flex: 1; color: var(--dsw-alias-state-danger-primary, #d92d20); font-size: 12px; line-height: 17px; overflow-wrap: anywhere; }
 
+.drss-twoCol { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; align-items: start; }
+.drss-twoCol .drss-item { border: 1px solid var(--dsw-alias-border-l1, #eef0f3); border-radius: 10px; padding: 10px 12px; }
+.drss-twoCol .drss-historyRow { border: 1px solid var(--dsw-alias-border-l1, #eef0f3); border-radius: 10px; padding: 8px 12px; }
+@media (max-width: 720px) { .drss-twoCol { grid-template-columns: 1fr; } }
+
 .drss-feedCard { padding: 13px 15px; border: 1px solid var(--dsw-alias-border-l1, #eef0f3); border-radius: 12px; background: var(--dsw-alias-bg-layer-1, #fff); display: flex; flex-direction: column; gap: 6px; }
 .drss-feedHead { display: flex; align-items: center; gap: 8px; }
 .drss-feedName { min-width: 0; flex: 1; margin: 0; font-size: 14px; line-height: 21px; font-weight: 660; overflow-wrap: anywhere; }
