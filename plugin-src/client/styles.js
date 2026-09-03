@@ -148,6 +148,7 @@ const CSS = String.raw`
 .drss-scheduleTimeRow label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--dsw-alias-label-tertiary, #8f959e); }
 .drss-scheduleTimeRow input, .drss-scheduleTimeRow select { min-height: 30px; padding: 4px 8px; border: 1px solid var(--dsw-alias-border-l2, #dfe1e5); border-radius: 6px; font: inherit; background: var(--dsw-alias-bg-layer-1, #fff); }
 .drss-scheduleError { color: var(--dsw-alias-state-danger-primary, #d92d20); font-size: 12.5px; margin: 0; }
+.drss-scheduleActions { display: flex; justify-content: flex-end; padding-top: 4px; }
 .drss-scheduleTag { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; font-size: 12px; background: var(--dsw-alias-bg-layer-2, #f4f5f7); color: var(--dsw-alias-label-secondary, #646a73); }
 .drss-scheduleTagOn { background: var(--drss-green-soft); color: var(--drss-green); }
 .drss-scheduleTagInside { background: #fff7e6; color: #b25000; }

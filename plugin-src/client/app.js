@@ -618,22 +618,7 @@ function SettingsPanel({ status, busy, run, rpc, confirmAction }) {
             disabled: busy,
             onChange: (event) => setHistoryRows(event.target.value),
           }),
-          h('span', { className: 'drss-muted' }, tr('条')),
-          h('button', {
-            type: 'button',
-            className: 'drss-button',
-            disabled: busy,
-            onClick: () => run(
-              () => rpc(ENDPOINTS.settingsSave, {
-                checkInterval: Number(interval) || 5,
-                display: {
-                  recentItems: Math.trunc(Number(recentRows)) || 10,
-                  historyItems: Math.trunc(Number(historyRows)) || 10,
-                },
-              }),
-              tr('操作成功'),
-            ),
-          }, tr('保存')))),
+          h('span', { className: 'drss-muted' }, tr('条')))),
       h('section', { key: 'schedule', className: 'drss-schedule' },
         h('h3', { style: { margin: '0 0 10px', fontSize: 14 } }, tr('时间区间')),
         h('div', { className: 'drss-scheduleBody' },
@@ -690,33 +675,45 @@ function SettingsPanel({ status, busy, run, rpc, confirmAction }) {
                 h('option', { value: 'system' }, tr('系统时区')),
                 h('option', { value: 'UTC' }, 'UTC')))),
             !scheduleValid ? h('p', { className: 'drss-scheduleError' }, tr('请输入有效的开始/结束时间')) : null,
-            h('button', {
-              type: 'button',
-              className: 'drss-button drss-buttonPrimary',
-              disabled: busy || !scheduleValid,
-              onClick: () => run(
-                async () => {
-                  await rpc(ENDPOINTS.settingsSave, {
-                    schedule: {
-                      enabled: scheduleEnabled,
-                      days: scheduleDays,
-                      startTime: scheduleStart,
-                      endTime: scheduleEnd,
-                      timezone: scheduleTimezone,
-                    },
-                  });
-                  // Intentionally *not* clearing `userDraft` here. The
-                  // host will return the new schedule through the next
-                  // `status()` poll (refresh() inside run()), and the
-                  // `dropDraftWhenStatusCatchesUp` effect will clear the
-                  // draft only once `status.settings.schedule` actually
-                  // reflects what we just submitted. Clearing the draft
-                  // eagerly causes a one-frame flash where the toggle
-                  // appears to revert to the pre-save value.
-                },
-                tr('操作成功'),
-              ),
-            }, tr('保存时间区间'))) : null))),
+            h('div', { className: 'drss-scheduleActions' },
+              h('button', {
+                type: 'button',
+                className: 'drss-button drss-buttonPrimary',
+                disabled: busy || !scheduleValid,
+                onClick: () => run(
+                  async () => {
+                    // Single save button covers all "运行设置" form
+                    // fields: the check interval + display rows on top
+                    // and the schedule below. The host treats each
+                    // payload key independently (undefined keeps the
+                    // stored value), so it is safe to send them all in
+                    // one round-trip.
+                    await rpc(ENDPOINTS.settingsSave, {
+                      checkInterval: Number(interval) || 5,
+                      display: {
+                        recentItems: Math.trunc(Number(recentRows)) || 10,
+                        historyItems: Math.trunc(Number(historyRows)) || 10,
+                      },
+                      schedule: {
+                        enabled: scheduleEnabled,
+                        days: scheduleDays,
+                        startTime: scheduleStart,
+                        endTime: scheduleEnd,
+                        timezone: scheduleTimezone,
+                      },
+                    });
+                    // Intentionally *not* clearing `userDraft` here. The
+                    // host will return the new schedule through the next
+                    // `status()` poll (refresh() inside run()), and the
+                    // `dropDraftWhenStatusCatchesUp` effect will clear the
+                    // draft only once `status.settings.schedule` actually
+                    // reflects what we just submitted. Clearing the draft
+                    // eagerly causes a one-frame flash where the toggle
+                    // appears to revert to the pre-save value.
+                  },
+                  tr('操作成功'),
+                ),
+              }, tr('保存')))) : null))),
     h('section', { key: 'danger', className: 'drss-section' },
       h('h3', { style: { margin: '0 0 10px', fontSize: 14 } }, tr('数据记录')),
       h('div', { className: 'drss-settingsRows' },
