@@ -578,10 +578,6 @@ function SettingsPanel({ status, busy, run, rpc, confirmAction }) {
   const DAY_KEYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
   const timePattern = /^([01]\d|2[0-3]):[0-5]\d$/;
   const scheduleValid = timePattern.test(scheduleStart) && timePattern.test(scheduleEnd);
-  const scheduleActive = status.settings?.scheduleActive === true;
-  const scheduleStatusLabel = !scheduleEnabled
-    ? tr('时间区间未启用')
-    : (scheduleActive ? tr('当前在窗口内') : tr('当前在窗口外'));
   return [
     h('section', { key: 'interval', className: 'drss-section' },
       h('h3', { style: { margin: '0 0 10px', fontSize: 14 } }, tr('运行设置')),
@@ -638,19 +634,9 @@ function SettingsPanel({ status, busy, run, rpc, confirmAction }) {
               tr('操作成功'),
             ),
           }, tr('保存')))),
-      h('details', { key: 'schedule', className: 'drss-schedule' },
-        h('summary', { className: 'drss-scheduleSummary' },
-          h('strong', null, tr('时间区间')),
-          h('span', {
-            className: scheduleEnabled ? 'drss-scheduleTag drss-scheduleTagOn' : 'drss-scheduleTag',
-          }, scheduleEnabled ? tr('时间区间已启用') : tr('时间区间未启用')),
-          h('span', {
-            className: scheduleActive && scheduleEnabled
-              ? 'drss-scheduleTag drss-scheduleTagInside'
-              : 'drss-scheduleTag',
-          }, scheduleStatusLabel)),
+      h('section', { key: 'schedule', className: 'drss-schedule' },
+        h('h3', { style: { margin: '0 0 10px', fontSize: 14 } }, tr('时间区间')),
         h('div', { className: 'drss-scheduleBody' },
-          h('p', { className: 'drss-muted' }, tr('启用时间区间帮助')),
           h('label', { className: 'drss-scheduleRow' },
             h('input', {
               type: 'checkbox',
