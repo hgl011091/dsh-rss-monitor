@@ -134,6 +134,23 @@ const CSS = String.raw`
 .drss-settingsRow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .drss-settingsRow .drss-label { text-align: left; width: auto; }
 .drss-muted { color: var(--dsw-alias-label-tertiary, #8f959e); font-size: 12.5px; line-height: 19px; }
+.drss-schedule { margin-top: 14px; border-top: 1px dashed var(--dsw-alias-border-l1, #eef0f3); padding-top: 12px; }
+.drss-scheduleSummary { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; cursor: pointer; list-style: none; }
+.drss-scheduleSummary::-webkit-details-marker { display: none; }
+.drss-scheduleSummary::before { content: '▸'; display: inline-block; transition: transform .15s ease; color: var(--dsw-alias-label-tertiary, #8f959e); }
+.drss-schedule[open] > .drss-scheduleSummary::before { transform: rotate(90deg); }
+.drss-scheduleBody { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; }
+.drss-scheduleRow { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }
+.drss-scheduleFields { display: flex; flex-direction: column; gap: 12px; padding: 10px 12px; border: 1px solid var(--dsw-alias-border-l1, #eef0f3); border-radius: 10px; background: var(--dsw-alias-bg-layer-1, #fff); }
+.drss-scheduleDays { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 10px; }
+.drss-scheduleDay { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; }
+.drss-scheduleTimeRow { display: flex; flex-wrap: wrap; gap: 14px; }
+.drss-scheduleTimeRow label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--dsw-alias-label-tertiary, #8f959e); }
+.drss-scheduleTimeRow input, .drss-scheduleTimeRow select { min-height: 30px; padding: 4px 8px; border: 1px solid var(--dsw-alias-border-l2, #dfe1e5); border-radius: 6px; font: inherit; background: var(--dsw-alias-bg-layer-1, #fff); }
+.drss-scheduleError { color: var(--dsw-alias-state-danger-primary, #d92d20); font-size: 12.5px; margin: 0; }
+.drss-scheduleTag { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; font-size: 12px; background: var(--dsw-alias-bg-layer-2, #f4f5f7); color: var(--dsw-alias-label-secondary, #646a73); }
+.drss-scheduleTagOn { background: var(--drss-green-soft); color: var(--drss-green); }
+.drss-scheduleTagInside { background: #fff7e6; color: #b25000; }
 .drss-spacer { flex: 1; }
 @media (max-width: 640px) {
   .drss-form { grid-template-columns: 1fr; }

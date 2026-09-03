@@ -41,12 +41,72 @@ export const LIMITS = Object.freeze({
   maxEmailFieldLength: 254,
   maxDisplayRows: 100,
   smtpPassRefPattern: /^DSH_RSS_SMTP_PASS_[A-F0-9]{24}$/,
+  maxScheduleDays: 7,
+  timePattern: /^([01]\d|2[0-3]):[0-5]\d$/,
+  maxTimezoneLength: 64,
+  systemTimezone: 'system',
 });
 
 export const DEFAULT_SETTINGS = Object.freeze({
   checkInterval: 5,
   enabled: false,
+  schedule: null,
 });
+
+const SCHEDULE_TIMEZONE_PATTERN = /^[A-Za-z][A-Za-z0-9_+\-/]{0,63}$/;
+
+function isValidTimezone(value) {
+  if (value === LIMITS.systemTimezone || value === 'UTC') return true;
+  if (typeof value !== 'string' || value.length === 0
+    || value.length > LIMITS.maxTimezoneLength) return false;
+  if (!SCHEDULE_TIMEZONE_PATTERN.test(value)) return false;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function normalizeDays(value) {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) return null;
+  if (value.length > LIMITS.maxScheduleDays) return null;
+  const days = [];
+  for (const raw of value) {
+    if (!Number.isInteger(raw) || raw < 0 || raw > 6) return null;
+    if (!days.includes(raw)) days.push(raw);
+  }
+  return days.sort((a, b) => a - b);
+}
+
+/**
+ * Normalize an optional time-window schedule. Returns a frozen object on
+ * success or `null` when the input is malformed. Returning `null` differs
+ * from "the feature is off": an invalid payload must surface as a config
+ * error rather than silently disabling the window.
+ */
+export function normalizeSchedule(value) {
+  if (value === undefined || value === null) return null;
+  if (!isRecord(value)) return null;
+  const enabled = value.enabled === true;
+  const days = normalizeDays(value.days);
+  if (days === null) return null;
+  const startTime = typeof value.startTime === 'string' ? value.startTime.trim() : '';
+  const endTime = typeof value.endTime === 'string' ? value.endTime.trim() : '';
+  if (!LIMITS.timePattern.test(startTime) || !LIMITS.timePattern.test(endTime)) return null;
+  const timezone = typeof value.timezone === 'string' && value.timezone.trim()
+    ? value.timezone.trim()
+    : LIMITS.systemTimezone;
+  if (!isValidTimezone(timezone)) return null;
+  return Object.freeze({
+    enabled,
+    days: Object.freeze(days),
+    startTime,
+    endTime,
+    timezone,
+  });
+}
 
 export const DEFAULT_DISPLAY = Object.freeze({
   recentItems: 10,
@@ -138,7 +198,9 @@ export function normalizeSettings(value) {
     return null;
   }
   const enabled = base.enabled === undefined ? DEFAULT_SETTINGS.enabled : base.enabled === true;
-  return Object.freeze({ checkInterval: interval, enabled });
+  const schedule = normalizeSchedule(base.schedule ?? DEFAULT_SETTINGS.schedule);
+  if (base.schedule !== undefined && base.schedule !== null && schedule === null) return null;
+  return Object.freeze({ checkInterval: interval, enabled, schedule });
 }
 
 /**

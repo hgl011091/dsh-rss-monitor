@@ -8,6 +8,7 @@ import {
   normalizeEmailConfig,
   normalizeFeed,
   normalizeFeeds,
+  normalizeSchedule,
   normalizeSettings,
   normalizeStatus,
   randomId,
@@ -23,7 +24,7 @@ test('RSS_RPC_CHANNEL matches the Harness channel pattern', () => {
   assert.equal(RSS_PROTOCOL_VERSION, 'dsh-rss-monitor.v1');
   assert.ok(Object.isFrozen(RSS_RPC_ENDPOINTS));
   assert.ok(Object.isFrozen(LIMITS));
-  assert.deepEqual(DEFAULT_SETTINGS, { checkInterval: 5, enabled: false });
+  assert.deepEqual(DEFAULT_SETTINGS, { checkInterval: 5, enabled: false, schedule: null });
 });
 
 test('normalizeFeed accepts a valid feed and fills defaults', () => {
@@ -98,16 +99,81 @@ test('normalizeFeeds validates the whole list', () => {
 test('normalizeSettings clamps nothing and rejects out-of-range intervals', () => {
   assert.deepEqual(normalizeSettings(undefined), DEFAULT_SETTINGS);
   assert.deepEqual(normalizeSettings({}), DEFAULT_SETTINGS);
-  assert.deepEqual(normalizeSettings({ checkInterval: 30, enabled: true }), { checkInterval: 30, enabled: true });
+  assert.deepEqual(normalizeSettings({ checkInterval: 30, enabled: true }),
+    { checkInterval: 30, enabled: true, schedule: null });
   assert.equal(normalizeSettings({ checkInterval: 0 }), null);
   assert.equal(normalizeSettings({ checkInterval: 1441 }), null);
   assert.equal(normalizeSettings({ checkInterval: 2.5 }), null);
-  assert.deepEqual(normalizeSettings({ checkInterval: '5' }), { checkInterval: 5, enabled: false });
+  assert.deepEqual(normalizeSettings({ checkInterval: '5' }),
+    { checkInterval: 5, enabled: false, schedule: null });
   assert.equal(normalizeSettings({ checkInterval: 'abc' }), null);
   assert.deepEqual(normalizeSettings({ checkInterval: LIMITS.maxCheckIntervalMinutes }), {
     checkInterval: LIMITS.maxCheckIntervalMinutes,
     enabled: false,
+    schedule: null,
   });
+});
+
+test('normalizeSchedule accepts valid weekly windows and defaults', () => {
+  assert.equal(normalizeSchedule(undefined), null);
+  assert.equal(normalizeSchedule(null), null);
+  assert.equal(normalizeSchedule({}), null);
+  const off = normalizeSchedule({ enabled: false, days: [1, 2], startTime: '09:00', endTime: '18:00' });
+  assert.ok(off);
+  assert.equal(off.enabled, false);
+  assert.deepEqual([...off.days], [1, 2]);
+  const on = normalizeSchedule({
+    enabled: true, days: [1, 2, 3, 4, 5], startTime: '09:00', endTime: '18:00', timezone: 'UTC',
+  });
+  assert.ok(on);
+  assert.equal(on.enabled, true);
+  assert.equal(on.startTime, '09:00');
+  assert.equal(on.endTime, '18:00');
+  assert.equal(on.timezone, 'UTC');
+  // No days = every day; explicit empty array is allowed.
+  const everyday = normalizeSchedule({ enabled: true, startTime: '00:00', endTime: '23:59' });
+  assert.ok(everyday);
+  assert.deepEqual([...everyday.days], []);
+  assert.equal(everyday.timezone, 'system');
+});
+
+test('normalizeSchedule rejects malformed windows', () => {
+  const tooManyDays = Array.from({ length: 8 }, (_, i) => i);
+  assert.equal(normalizeSchedule({ enabled: true, days: tooManyDays }), null);
+  assert.equal(normalizeSchedule({ enabled: true, days: [-1, 0] }), null);
+  assert.equal(normalizeSchedule({ enabled: true, days: [7] }), null);
+  assert.equal(normalizeSchedule({ enabled: true, days: [1.5] }), null);
+  assert.equal(normalizeSchedule({ enabled: true, startTime: '24:00', endTime: '18:00' }), null);
+  assert.equal(normalizeSchedule({ enabled: true, startTime: '9:00', endTime: '18:00' }), null);
+  assert.equal(normalizeSchedule({ enabled: true, startTime: '09:60', endTime: '18:00' }), null);
+  assert.equal(normalizeSchedule({ enabled: true, startTime: '09:00', endTime: '18:00', timezone: 'Not/AZone' }), null);
+  assert.equal(normalizeSchedule({ enabled: true, startTime: '09:00', endTime: '18:00', timezone: 'a'.repeat(200) }), null);
+  // Non-record payloads.
+  assert.equal(normalizeSchedule('daily'), null);
+  assert.equal(normalizeSchedule(42), null);
+  assert.equal(normalizeSchedule([1, 2, 3]), null);
+});
+
+test('normalizeSettings routes a valid schedule through and rejects malformed schedules', () => {
+  const withSchedule = normalizeSettings({
+    checkInterval: 10,
+    enabled: true,
+    schedule: { enabled: true, days: [1, 2, 3, 4, 5], startTime: '09:00', endTime: '18:00' },
+  });
+  assert.ok(withSchedule);
+  assert.equal(withSchedule.schedule.enabled, true);
+  assert.equal(withSchedule.schedule.startTime, '09:00');
+  // A malformed schedule must fail the whole settings payload so an invalid
+  // window can never persist alongside a valid enabled flag.
+  assert.equal(normalizeSettings({
+    checkInterval: 10,
+    enabled: true,
+    schedule: { enabled: true, startTime: 'bad', endTime: '18:00' },
+  }), null);
+  // A null schedule clears it without breaking the rest of the payload.
+  const cleared = normalizeSettings({ checkInterval: 10, enabled: true, schedule: null });
+  assert.ok(cleared);
+  assert.equal(cleared.schedule, null);
 });
 
 test('normalizeEmailConfig requires host and to, validates port and passRef', () => {

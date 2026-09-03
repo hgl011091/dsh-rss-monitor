@@ -6,9 +6,11 @@ import {
   normalizeDisplay,
   normalizeEmailConfig,
   normalizeFeed,
+  normalizeSchedule,
   normalizeSettings,
   RSS_RPC_ENDPOINTS as RSS_ENDPOINTS,
 } from './protocol.mjs';
+import { inScheduleWindow } from './schedule-window.mjs';
 
 function isRecord(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -95,6 +97,8 @@ export class RssController {
       settings: {
         checkInterval: settings?.checkInterval ?? 5,
         enabled: settings?.enabled === true,
+        schedule: settings?.schedule ?? null,
+        scheduleActive: inScheduleWindow(settings?.schedule, new Date()),
       },
       feeds: (config?.feeds ?? []).map((feed) => ({
         id: feed.id,
@@ -191,12 +195,25 @@ export class RssController {
     return { feeds: (await this.status()).feeds };
   }
 
-  async saveSettings({ checkInterval, enabled, display } = {}) {
+  async saveSettings({ checkInterval, enabled, display, schedule } = {}) {
     const config = this.#configStore.get();
     const current = config.settings;
+    // `schedule` semantics: `undefined` keeps the stored value, `null`
+    // disables the window by clearing it, an object runs through the same
+    // normalizer the Host uses on initial load. This is what lets the
+    // settings page send a partial save without breaking the feature.
+    const nextScheduleRaw = schedule === undefined
+      ? current.schedule
+      : (schedule === null ? null : normalizeSchedule(schedule));
+    if (schedule !== undefined && schedule !== null && nextScheduleRaw === null) {
+      const error = new Error('时间区间配置不合法');
+      error.code = 'invalid-schedule';
+      throw error;
+    }
     const settings = normalizeSettings({
       checkInterval: checkInterval ?? current.checkInterval,
       enabled: enabled ?? current.enabled,
+      schedule: nextScheduleRaw,
     });
     if (!settings) {
       const error = new Error(`检查间隔必须是 ${LIMITS.minCheckIntervalMinutes}-${LIMITS.maxCheckIntervalMinutes} 分钟`);

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 
 import { LIMITS } from './protocol.mjs';
+import { inScheduleWindow } from './schedule-window.mjs';
 
 /**
  * Stable dedup id for a feed item, matching the rss-video-monitor scheme:
@@ -100,6 +101,9 @@ export class RssMonitor {
   start({ immediate = true } = {}) {
     const settings = this.#configStore.get()?.settings;
     if (!settings?.enabled) return false;
+    // The schedule window is a no-op when the feature is off or invalid; the
+    // exact return value is intentionally lost — the monitor must still arm
+    // the timer so it can fire once the next window opens.
     this.#stopped = false;
     this.#armTimer(settings.checkInterval);
     if (immediate) {
@@ -167,6 +171,13 @@ export class RssMonitor {
   async #runCheck(manual) {
     const config = this.#configStore.get();
     const state = this.#stateStore.get();
+    const settings = config?.settings;
+    // The schedule window is checked on every tick rather than gating `start()`
+    // because `setInterval` may straddle a window boundary; the check itself
+    // is the single source of truth. Manual triggers always run regardless.
+    if (manual !== true && !inScheduleWindow(settings?.schedule, new Date())) {
+      return { newItems: [], errors: [], checkedFeeds: 0, skipped: 'out-of-window' };
+    }
     const feeds = (config?.feeds ?? []).filter((feed) => feed.enabled);
     const notified = new Set(state.notifiedItems);
     const newItems = [];

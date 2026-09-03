@@ -3,6 +3,14 @@ import * as React from 'react';
 import { normalizeStatus, RSS_RPC_ENDPOINTS as ENDPOINTS, unwrapRssRpc } from './api.js';
 import { tr } from './i18n.js';
 
+// Module-level cache of the most recent status. The settings tab is
+// injected into DSH via a slot and DSH may unmount the whole tab when the
+// user navigates to a different settings page. Without this cache the
+// remount would initialise `status` from `normalizeStatus(null)`, briefly
+// showing the schedule toggle as off (because useState only runs its
+// initialiser once per mount). We keep the last good snapshot in module
+// scope so the next mount picks up where the previous one left off.
+let lastKnownStatus = null;
 const POLL_MS = 15_000;
 
 function h(type, props, ...children) {
@@ -486,6 +494,31 @@ function EmailPanel({ status, busy, run, rpc }) {
 }
 
 function SettingsPanel({ status, busy, run, rpc, confirmAction }) {
+  // The form holds a *draft* of the schedule, separate from the host's
+  // persisted value. `null` means "no in-progress edit, derive from status",
+  // which is what we want on remount after a view switch. The previous
+  // design mirrored each field into its own useState initialised from
+  // `status`; because useState only runs its initialiser once at mount,
+  // when the panel remounted before the parent's first poll had populated
+  // `status.settings.schedule`, the toggle silently snapped back to
+  // disabled. Anchoring display to a single draft object with `null` for
+  // "no draft" fixes that without any useEffect gymnastics.
+  const persistedSchedule = status.settings?.schedule ?? null;
+  const [userDraft, setUserDraft] = React.useState(null);
+  const baseSchedule = persistedSchedule ?? {
+    enabled: false,
+    days: [],
+    startTime: '09:00',
+    endTime: '18:00',
+    timezone: 'system',
+  };
+  const effectiveSchedule = userDraft ?? baseSchedule;
+  const scheduleEnabled = effectiveSchedule.enabled === true;
+  const scheduleDays = Array.isArray(effectiveSchedule.days) ? effectiveSchedule.days : [];
+  const scheduleStart = effectiveSchedule.startTime ?? '09:00';
+  const scheduleEnd = effectiveSchedule.endTime ?? '18:00';
+  const scheduleTimezone = effectiveSchedule.timezone ?? 'system';
+
   const [interval, setIntervalValue] = React.useState(String(status.settings?.checkInterval ?? 5));
   const [recentRows, setRecentRows] = React.useState(String(status.display?.recentItems ?? 10));
   const [historyRows, setHistoryRows] = React.useState(String(status.display?.historyItems ?? 10));
@@ -493,7 +526,62 @@ function SettingsPanel({ status, busy, run, rpc, confirmAction }) {
     setIntervalValue(String(status.settings?.checkInterval ?? 5));
     setRecentRows(String(status.display?.recentItems ?? 10));
     setHistoryRows(String(status.display?.historyItems ?? 10));
-  }, [status.settings?.checkInterval, status.display?.recentItems, status.display?.historyItems]);
+  }, [
+    status.settings?.checkInterval,
+    status.display?.recentItems,
+    status.display?.historyItems,
+  ]);
+
+  // Patch helper: every onChange writes a draft copy. Once the user saves,
+  // we drop the draft so the form re-derives from `status` (the source of
+  // truth). A live draft prevents an in-progress edit from being clobbered
+  // by the 15 s status poll.
+  const updateDraft = React.useCallback((patch) => {
+    setUserDraft((current) => ({ ...(current ?? baseSchedule), ...patch }));
+  }, [baseSchedule]);
+
+  // After a successful save the host acknowledges the new schedule by
+  // mirroring it back into `status.settings.schedule`. The poll cycle
+  // delivers that acknowledgement asynchronously (it has to go through
+  // `refresh()` first), so a naive `setUserDraft(null)` immediately
+  // after `await rpc(...)` would snap the form back to whatever the
+  // *stale* `status` still says, which on a slow refresh window looks
+  // like the toggle "auto-cancels" the moment the user clicks save.
+  // We therefore drop the draft only once the fresh status actually
+  // reflects what the user just submitted.
+  const dropDraftWhenStatusCatchesUp = React.useCallback(() => {
+    if (!userDraft) return;
+    const persisted = status.settings?.schedule ?? null;
+    if (!persisted) return;
+    const draftKey = JSON.stringify({
+      enabled: userDraft.enabled,
+      days: userDraft.days,
+      startTime: userDraft.startTime,
+      endTime: userDraft.endTime,
+      timezone: userDraft.timezone,
+    });
+    const persistedKey = JSON.stringify({
+      enabled: persisted.enabled,
+      days: persisted.days,
+      startTime: persisted.startTime,
+      endTime: persisted.endTime,
+      timezone: persisted.timezone,
+    });
+    if (draftKey === persistedKey) {
+      setUserDraft(null);
+    }
+  }, [userDraft, status.settings?.schedule]);
+  React.useEffect(() => {
+    dropDraftWhenStatusCatchesUp();
+  }, [dropDraftWhenStatusCatchesUp]);
+
+  const DAY_KEYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+  const timePattern = /^([01]\d|2[0-3]):[0-5]\d$/;
+  const scheduleValid = timePattern.test(scheduleStart) && timePattern.test(scheduleEnd);
+  const scheduleActive = status.settings?.scheduleActive === true;
+  const scheduleStatusLabel = !scheduleEnabled
+    ? tr('时间区间未启用')
+    : (scheduleActive ? tr('当前在窗口内') : tr('当前在窗口外'));
   return [
     h('section', { key: 'interval', className: 'drss-section' },
       h('h3', { style: { margin: '0 0 10px', fontSize: 14 } }, tr('运行设置')),
@@ -549,7 +637,100 @@ function SettingsPanel({ status, busy, run, rpc, confirmAction }) {
               }),
               tr('操作成功'),
             ),
-          }, tr('保存'))))),
+          }, tr('保存')))),
+      h('details', { key: 'schedule', className: 'drss-schedule' },
+        h('summary', { className: 'drss-scheduleSummary' },
+          h('strong', null, tr('时间区间')),
+          h('span', {
+            className: scheduleEnabled ? 'drss-scheduleTag drss-scheduleTagOn' : 'drss-scheduleTag',
+          }, scheduleEnabled ? tr('时间区间已启用') : tr('时间区间未启用')),
+          h('span', {
+            className: scheduleActive && scheduleEnabled
+              ? 'drss-scheduleTag drss-scheduleTagInside'
+              : 'drss-scheduleTag',
+          }, scheduleStatusLabel)),
+        h('div', { className: 'drss-scheduleBody' },
+          h('p', { className: 'drss-muted' }, tr('启用时间区间帮助')),
+          h('label', { className: 'drss-scheduleRow' },
+            h('input', {
+              type: 'checkbox',
+              checked: scheduleEnabled,
+              disabled: busy,
+              onChange: (event) => updateDraft({ enabled: event.target.checked }),
+            }),
+            tr('启用时间区间')),
+          scheduleEnabled ? h('div', { className: 'drss-scheduleFields' },
+            h('fieldset', { className: 'drss-scheduleDays' },
+              h('legend', null, tr('星期')),
+              DAY_KEYS.map((key, dayIndex) => h('label', { key: dayIndex, className: 'drss-scheduleDay' },
+                h('input', {
+                  type: 'checkbox',
+                  checked: scheduleDays.includes(dayIndex),
+                  disabled: busy,
+                  onChange: (event) => {
+                    updateDraft({
+                      days: event.target.checked
+                        ? [...scheduleDays, dayIndex].sort((a, b) => a - b)
+                        : scheduleDays.filter((value) => value !== dayIndex),
+                    });
+                  },
+                }),
+                tr(key))),
+              h('small', { className: 'drss-muted' }, tr('不选任何天表示每天'))),
+            h('div', { className: 'drss-scheduleTimeRow' },
+              h('label', null,
+                h('span', null, tr('开始时间')),
+                h('input', {
+                  type: 'time',
+                  value: scheduleStart,
+                  disabled: busy,
+                  onChange: (event) => updateDraft({ startTime: event.target.value }),
+                })),
+              h('label', null,
+                h('span', null, tr('结束时间')),
+                h('input', {
+                  type: 'time',
+                  value: scheduleEnd,
+                  disabled: busy,
+                  onChange: (event) => updateDraft({ endTime: event.target.value }),
+                })),
+              h('label', null,
+                h('span', null, tr('时区')),
+                h('select', {
+                  value: scheduleTimezone,
+                  disabled: busy,
+                  onChange: (event) => updateDraft({ timezone: event.target.value }),
+                },
+                h('option', { value: 'system' }, tr('系统时区')),
+                h('option', { value: 'UTC' }, 'UTC')))),
+            !scheduleValid ? h('p', { className: 'drss-scheduleError' }, tr('请输入有效的开始/结束时间')) : null,
+            h('button', {
+              type: 'button',
+              className: 'drss-button drss-buttonPrimary',
+              disabled: busy || !scheduleValid,
+              onClick: () => run(
+                async () => {
+                  await rpc(ENDPOINTS.settingsSave, {
+                    schedule: {
+                      enabled: scheduleEnabled,
+                      days: scheduleDays,
+                      startTime: scheduleStart,
+                      endTime: scheduleEnd,
+                      timezone: scheduleTimezone,
+                    },
+                  });
+                  // Intentionally *not* clearing `userDraft` here. The
+                  // host will return the new schedule through the next
+                  // `status()` poll (refresh() inside run()), and the
+                  // `dropDraftWhenStatusCatchesUp` effect will clear the
+                  // draft only once `status.settings.schedule` actually
+                  // reflects what we just submitted. Clearing the draft
+                  // eagerly causes a one-frame flash where the toggle
+                  // appears to revert to the pre-save value.
+                },
+                tr('操作成功'),
+              ),
+            }, tr('保存时间区间'))) : null))),
     h('section', { key: 'danger', className: 'drss-section' },
       h('h3', { style: { margin: '0 0 10px', fontSize: 14 } }, tr('数据记录')),
       h('div', { className: 'drss-settingsRows' },
@@ -583,8 +764,8 @@ function SettingsPanel({ status, busy, run, rpc, confirmAction }) {
   ];
 }
 
-export function RssSettingsTab({ rpcCall, version = '0.1.0' }) {
-  const [status, setStatus] = React.useState(() => normalizeStatus(null));
+export function RssSettingsTab({ rpcCall, version = '0.2.0' }) {
+  const [status, setStatus] = React.useState(() => lastKnownStatus ?? normalizeStatus(null));
   const [view, setView] = React.useState('overview');
   const [notice, setNotice] = React.useState(null);
   const [busy, setBusy] = React.useState(false);
@@ -615,6 +796,10 @@ export function RssSettingsTab({ rpcCall, version = '0.1.0' }) {
       if (json !== lastStatusJson.current) {
         lastStatusJson.current = json;
         setStatus(next);
+        // Mirror the freshest status to module scope so the next remount of
+        // this tab (e.g. when the user navigates to a different settings
+        // page and back) starts with up-to-date data instead of defaults.
+        lastKnownStatus = next;
       }
     } catch (error) {
       setNotice({ type: 'error', text: `${tr('操作失败')}: ${shortErrorText(error.message)}` });
