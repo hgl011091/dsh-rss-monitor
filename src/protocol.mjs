@@ -305,6 +305,13 @@ export function normalizeStatus(value) {
         ? settings.checkInterval
         : DEFAULT_SETTINGS.checkInterval,
       enabled: settings.enabled === true,
+      // Pass through the persisted schedule so the settings tab can
+      // re-derive its draft baseline from the host's source of truth.
+      // Without this field the toggle would always render from the
+      // client-side defaults (enabled: false) and appear to "auto-cancel"
+      // after every save or view switch.
+      schedule: normalizeSchedule(settings.schedule ?? DEFAULT_SETTINGS.schedule),
+      scheduleActive: settings.scheduleActive === true,
     },
     feeds: Array.isArray(value.feeds) ? value.feeds : [],
     email: isRecord(value.email) ? value.email : null,

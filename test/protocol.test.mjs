@@ -271,3 +271,43 @@ test('normalizeStatus guards client payloads', () => {
   assert.equal(full.feeds.length, 1);
   assert.equal(full.notifiedCount, 3);
 });
+
+test('normalizeStatus passes the schedule field through', () => {
+  // Regression: the settings tab used to render the schedule toggle
+  // from the client-side defaults (enabled: false) because normalizeStatus
+  // silently dropped the schedule + scheduleActive fields, even though the
+  // host returned them. The toggle then "auto-cancelled" after every save
+  // and every view switch, because the client could never see what the
+  // host had stored.
+  const persisted = normalizeStatus({
+    running: true,
+    enabled: true,
+    settings: {
+      checkInterval: 5,
+      enabled: true,
+      schedule: {
+        enabled: true,
+        days: [1, 2, 3, 4, 5],
+        startTime: '09:00',
+        endTime: '18:00',
+        timezone: 'system',
+      },
+      scheduleActive: true,
+    },
+  });
+  assert.equal(persisted.settings.schedule.enabled, true);
+  assert.deepEqual(persisted.settings.schedule.days, [1, 2, 3, 4, 5]);
+  assert.equal(persisted.settings.schedule.startTime, '09:00');
+  assert.equal(persisted.settings.schedule.endTime, '18:00');
+  assert.equal(persisted.settings.schedule.timezone, 'system');
+  assert.equal(persisted.settings.scheduleActive, true);
+
+  // When the host reports no schedule, the client must mirror that.
+  const empty = normalizeStatus({
+    running: false,
+    enabled: false,
+    settings: { checkInterval: 5, enabled: false },
+  });
+  assert.equal(empty.settings.schedule, null);
+  assert.equal(empty.settings.scheduleActive, false);
+});
