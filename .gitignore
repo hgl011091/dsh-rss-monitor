@@ -1,6 +1,48 @@
-# Simple gitignore
+# Dependencies
 node_modules/
+.pnpm/
+
+# pnpm 9+ sometimes places hoisted/peer dependencies directly in the
+# workspace root (alongside node_modules). Ignore every top-level
+# directory whose name looks like an npm package — both bare names
+# like `react` and the @scope form like `@asamuzakjp`.
+/[!a-zA-Z]*/
+/[a-zA-Z]*[a-zA-Z0-9_-]/
+
+# Build artifacts
 *.tgz
-.tmp/
+
+# Logs
 debug.log
-package/
+*.log
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Test / scratch
+.tmp/
+.tmp-*/
+tmp/
+coverage/
+
+# Internal release scripts (kept out of the public repo; they live only
+# in the working copy used to push the actual release to GitHub/NPM)
+create-release.mjs
+push-to-github.cmd
+PUSH-NOTES.md
+RELEASE-*.md
+
+# Allowlist: keep our own top-level directories tracked
+!/cordis.patch.yml
+!/LICENSE
+!/README.md
+!/package.json
+!/.gitignore
+!/.editorconfig
+!/lib/
+!/plugin-src/
+!/src/
+!/test/

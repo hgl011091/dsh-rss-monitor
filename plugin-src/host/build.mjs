@@ -7,6 +7,14 @@ import { execFileSync } from 'node:child_process';
 // subprocess is blocked by the DSH desktop sandbox (spawn EPERM), so we
 // invoke the binary directly via its Node CLI shim. Same behaviour, no
 // subprocess: the shim inlines the binary path and exec's it in-process.
+//
+// esbuild 0.25.x always emits `require()` calls for CommonJS dependencies
+// even when --format=esm is set (#1944); the DSH cordis plugin loader is
+// a strict ESM loader and rejects "Dynamic require of 'events' is not
+// supported". The fix is to mark every Node built-in, rss-parser, and
+// nodemailer as --external so the emitted bundle is pure ESM and resolves
+// those modules at runtime through normal ESM import — rss-parser and
+// nodemailer are real dependencies on the published package now.
 const build = async (options) => {
   const esbuildCli = resolve(dirname(fileURLToPath(import.meta.url)), '../../node_modules/esbuild/bin/esbuild');
   const args = [esbuildCli, options.entryPoints[0]];
@@ -35,10 +43,17 @@ await build({
   platform: 'node',
   target: ['node22'],
   mainFields: ['module', 'main'],
-  // rss-parser and nodemailer are bundled (like dsh-im bundles the Lark SDK
-  // and Baileys), so the installed plugin has zero runtime package
-  // dependencies and cannot break on dependency resolution.
-  external: [],
+  // rss-parser and nodemailer ship as CommonJS. esbuild's --bundle emits
+  // `__commonJS` wrappers + `require()` calls for those, which DSH's
+  // strict ESM plugin loader refuses to run. Marking them --external turns
+  // them into plain ESM `import` statements that the loader resolves
+  // through node_modules at runtime. Node built-ins are also marked so
+  // the bundle does not need to ship its own polyfill.
+  external: [
+    'node:*',
+    'rss-parser',
+    'nodemailer',
+  ],
   outfile: outputPath,
   banner: {
     js: [
