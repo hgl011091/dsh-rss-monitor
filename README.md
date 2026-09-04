@@ -172,13 +172,6 @@ Get-Content "$env:USERPROFILE\.dsh\profiles\desktop\cordis.yml" -Raw
 # 然后再次重启 DSH Desktop
 ```
 
-### 插件收录（作者一次性的工作）
-
-让"插件市场"（dshmarket）都能找到并一键安装本插件：向 [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) 提 PR 新增 `data/plugins/hgl011091__dsh-rss-monitor.yml`（模板已备好：[awesome-dsh-plugin-entry.yml](awesome-dsh-plugin-entry.yml)），完整步骤与检查清单见 [PUBLISH.md](PUBLISH.md)。
-
-注意：**DSH Desktop 的市场安装边界只接受 npm 包**（GitHub-only 插件在市场 UI 会被拒收）—— 所以"发布到 npm"是桌面用户一键安装的前提；未发布 npm 时命令行用户请走方式四。
-
-> 插件数据存放在 `DSH_HOME/integrations/dsh-rss-monitor/`（`config.json` + `state.json`，临时文件 + rename 原子写入、owner-only 权限）。数据每台机器独立，不随插件目录迁移。
 
 ## 🕹 使用
 
@@ -217,27 +210,6 @@ dsh-rss-monitor/
 └─ test/                # node:test 单元测试套件
 ```
 
-角度要点（与 dsh-im 插件模式对齐）：
-
-- 通道名 `/dsh-rss-monitor`（满足 Harness 连接服务 `/^[A-Za-z0-9._~-]+$/` 校验，`/api` 保留），authority 默认 `loopback`
-- RPC 归一统一 `{ ok: true, value } | { ok: false, error: { code, message, details } }`，错误信标经客户端 zod schema 严格校验
-- 客户端经 `window.__ModuleLoader__.load({ id: 'dsh-rss-monitor', factory })` 加载，React 由 Harness 注入
-- SMTP 密码仅以凭据引用（`passRef`）出现在配置中，明文只存在于凭据库
-
-## 🛠 开发
-
-```bash
-npm install
-npm run check   # 构建两端 bundle + 运行全部 58 个单元测试
-npm test        # 仅跑测试（node:test）
-```
-
-| 构建 | 命令 | 产物 |
-|---|---|---|
-| Host | esbuild `--format=esm --platform=node --target=node22` | `lib/index.js`（rss-parser/nodemailer 已打包，自包含） |
-| Client | esbuild `--format=cjs --platform=browser --target=chrome100` | `lib/client.js`（React external，由 Harness 提供） |
-
-> 修改 Host 端代码需重启 Harness Desktop；仅客户端改动刷新设置页即可。
 
 ## 🗓 License
 
