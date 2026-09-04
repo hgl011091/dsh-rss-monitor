@@ -94,8 +94,6 @@ const EN = Object.freeze({
   '周六': 'Sat',
   '开始时间': 'Start time',
   '结束时间': 'End time',
-  '时区': 'Timezone',
-  '系统时区': 'System timezone',
   '不选任何天表示每天': 'No day selected = every day',
   '当前在窗口内': 'Currently inside the window',
   '当前在窗口外': 'Currently outside the window',

@@ -665,16 +665,7 @@ function SettingsPanel({ status, busy, run, rpc, confirmAction }) {
                   disabled: busy,
                   onChange: (event) => updateDraft({ endTime: event.target.value }),
                 })),
-              h('label', null,
-                h('span', null, tr('时区')),
-                h('select', {
-                  value: scheduleTimezone,
-                  disabled: busy,
-                  onChange: (event) => updateDraft({ timezone: event.target.value }),
-                },
-                h('option', { value: 'system' }, tr('系统时区')),
-                h('option', { value: 'UTC' }, 'UTC')))),
-            !scheduleValid ? h('p', { className: 'drss-scheduleError' }, tr('请输入有效的开始/结束时间')) : null) : null,
+            !scheduleValid ? h('p', { className: 'drss-scheduleError' }, tr('请输入有效的开始/结束时间')) : null)) : null,
           h('div', { className: 'drss-scheduleActions' },
               h('button', {
                 type: 'button',
