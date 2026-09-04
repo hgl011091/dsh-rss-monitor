@@ -154,7 +154,7 @@ function StatusCard({ label, value, tone }) {
     h('dd', { className: tone === 'run' ? 'drss-statusRun' : tone === 'stop' ? 'drss-statusStop' : undefined }, value));
 }
 
-function ItemCard({ item }) {
+const ItemCard = React.memo(function ItemCard({ item }) {
   const thumb = item.thumbnail
     ? h('img', { className: 'drss-itemThumb', src: item.thumbnail, alt: '', loading: 'lazy' })
     : h('span', { className: 'drss-itemThumbFallback', 'aria-hidden': 'true' }, '🎬');
@@ -169,7 +169,7 @@ function ItemCard({ item }) {
       h('p', { className: 'drss-itemMeta' },
         `${tr('上次检查')}: ${formatTime(item.pubDate ?? item.discoveredAt)}`)),
   );
-}
+});
 
 function OverviewPanel({ status }) {
   const history = status.history ?? [];
@@ -493,6 +493,30 @@ function EmailPanel({ status, busy, run, rpc }) {
   ];
 }
 
+// Day labels used in the weekly-schedule picker. Hoisted out of the panel
+// body so the array reference is stable across re-renders (the picker
+// maps over it; a fresh array on every render would force every child
+// checkbox to re-mount, losing focus on the day the user just clicked).
+const DAY_KEYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+// Compare just the schedule fields we care about (skip the persisted
+// shape that contains extra host-only fields). Keys are the same on both
+// sides so a JSON comparison is a flat string compare with no nested
+// objects of differing structure.
+function scheduleFingerprint(schedule) {
+  if (!schedule) return '';
+  return `${schedule.enabled ? 1 : 0}|${(schedule.days ?? []).join(',')}|${schedule.startTime ?? ''}|${schedule.endTime ?? ''}|${schedule.timezone ?? ''}`;
+}
+
+const DEFAULT_SCHEDULE = Object.freeze({
+  enabled: false,
+  days: [],
+  startTime: '09:00',
+  endTime: '18:00',
+  timezone: 'system',
+});
+
 function SettingsPanel({ status, busy, run, rpc, confirmAction }) {
   // The form holds a *draft* of the schedule, separate from the host's
   // persisted value. `null` means "no in-progress edit, derive from status",
@@ -505,19 +529,20 @@ function SettingsPanel({ status, busy, run, rpc, confirmAction }) {
   // "no draft" fixes that without any useEffect gymnastics.
   const persistedSchedule = status.settings?.schedule ?? null;
   const [userDraft, setUserDraft] = React.useState(null);
-  const baseSchedule = persistedSchedule ?? {
-    enabled: false,
-    days: [],
-    startTime: '09:00',
-    endTime: '18:00',
-    timezone: 'system',
-  };
-  const effectiveSchedule = userDraft ?? baseSchedule;
-  const scheduleEnabled = effectiveSchedule.enabled === true;
-  const scheduleDays = Array.isArray(effectiveSchedule.days) ? effectiveSchedule.days : [];
-  const scheduleStart = effectiveSchedule.startTime ?? '09:00';
-  const scheduleEnd = effectiveSchedule.endTime ?? '18:00';
-  const scheduleTimezone = effectiveSchedule.timezone ?? 'system';
+  // baseSchedule is the persisted snapshot OR the typed-in-but-unsaved
+  // draft OR the documented default. Memoise so the object reference
+  // stays stable across re-renders (this keeps updateDraft's identity
+  // stable, which in turn keeps every onChange closure stable, which
+  // means a 15 s status poll no longer forces every input to re-render).
+  const baseSchedule = React.useMemo(
+    () => userDraft ?? persistedSchedule ?? DEFAULT_SCHEDULE,
+    [userDraft, persistedSchedule],
+  );
+  const scheduleEnabled = baseSchedule.enabled === true;
+  const scheduleDays = baseSchedule.days ?? [];
+  const scheduleStart = baseSchedule.startTime ?? '09:00';
+  const scheduleEnd = baseSchedule.endTime ?? '18:00';
+  const scheduleTimezone = baseSchedule.timezone ?? 'system';
 
   const [interval, setIntervalValue] = React.useState(String(status.settings?.checkInterval ?? 5));
   const [recentRows, setRecentRows] = React.useState(String(status.display?.recentItems ?? 10));
@@ -536,9 +561,12 @@ function SettingsPanel({ status, busy, run, rpc, confirmAction }) {
   // we drop the draft so the form re-derives from `status` (the source of
   // truth). A live draft prevents an in-progress edit from being clobbered
   // by the 15 s status poll.
+  // No dependencies: setUserDraft is stable, and we deliberately read
+  // the latest baseSchedule via setUserDraft's functional form so the
+  // callback identity never changes (preserves input focus on rerender).
   const updateDraft = React.useCallback((patch) => {
-    setUserDraft((current) => ({ ...(current ?? baseSchedule), ...patch }));
-  }, [baseSchedule]);
+    setUserDraft((current) => ({ ...(current ?? persistedSchedule ?? DEFAULT_SCHEDULE), ...patch }));
+  }, [persistedSchedule]);
 
   // After a successful save the host acknowledges the new schedule by
   // mirroring it back into `status.settings.schedule`. The poll cycle
@@ -549,25 +577,15 @@ function SettingsPanel({ status, busy, run, rpc, confirmAction }) {
   // like the toggle "auto-cancels" the moment the user clicks save.
   // We therefore drop the draft only once the fresh status actually
   // reflects what the user just submitted.
+  // Use a fingerprint string instead of JSON.stringify so a status poll
+  // that returns the same schedule is O(string length) instead of
+  // O(stringified object size) — on a 15 s timer this used to be one
+  // of the more noticeable main-thread costs.
   const dropDraftWhenStatusCatchesUp = React.useCallback(() => {
     if (!userDraft) return;
     const persisted = status.settings?.schedule ?? null;
     if (!persisted) return;
-    const draftKey = JSON.stringify({
-      enabled: userDraft.enabled,
-      days: userDraft.days,
-      startTime: userDraft.startTime,
-      endTime: userDraft.endTime,
-      timezone: userDraft.timezone,
-    });
-    const persistedKey = JSON.stringify({
-      enabled: persisted.enabled,
-      days: persisted.days,
-      startTime: persisted.startTime,
-      endTime: persisted.endTime,
-      timezone: persisted.timezone,
-    });
-    if (draftKey === persistedKey) {
+    if (scheduleFingerprint(userDraft) === scheduleFingerprint(persisted)) {
       setUserDraft(null);
     }
   }, [userDraft, status.settings?.schedule]);
@@ -575,9 +593,10 @@ function SettingsPanel({ status, busy, run, rpc, confirmAction }) {
     dropDraftWhenStatusCatchesUp();
   }, [dropDraftWhenStatusCatchesUp]);
 
-  const DAY_KEYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-  const timePattern = /^([01]\d|2[0-3]):[0-5]\d$/;
-  const scheduleValid = timePattern.test(scheduleStart) && timePattern.test(scheduleEnd);
+  const scheduleValid = React.useMemo(
+    () => TIME_PATTERN.test(scheduleStart) && TIME_PATTERN.test(scheduleEnd),
+    [scheduleStart, scheduleEnd],
+  );
   return [
     h('section', { key: 'interval', className: 'drss-section' },
       h('h3', { style: { margin: '0 0 10px', fontSize: 14 } }, tr('运行设置')),
@@ -761,19 +780,57 @@ export function RssSettingsTab({ rpcCall, version = '0.2.0' }) {
     });
   }, []);
 
-  const lastStatusJson = React.useRef('');
+  // Cheap "did anything change since last poll?" check. The previous design
+  // ran JSON.stringify on the entire status object — including the full
+  // history array, the notifiedItems set, and every feed — every 15 s, even
+  // when nothing changed. We only care about a handful of fields for the
+  // visible UI; the rest is just data we hand back to children, so equality
+  // there doesn't justify a re-render on its own. Each top-level value is
+  // compared by identity (numbers/strings/booleans compare by value), and
+  // arrays are compared by length + a sampled item key, which catches
+  // appends, removals, and the common "nothing happened" case in O(1).
+  const lastFingerprint = React.useRef('');
   const refresh = React.useCallback(async () => {
     try {
       const next = normalizeStatus(await rpc(ENDPOINTS.status, {}));
-      // Skip the re-render entirely when the poll returned identical data.
-      const json = JSON.stringify(next);
-      if (json !== lastStatusJson.current) {
-        lastStatusJson.current = json;
+      const settings = next.settings ?? {};
+      const feeds = next.feeds ?? [];
+      const recent = next.recentItems ?? [];
+      const history = next.history ?? [];
+      const fingerprint = [
+        next.running ? 1 : 0,
+        next.enabled ? 1 : 0,
+        next.lastCheck ?? '',
+        next.nextCheckAt ?? '',
+        next.emailConfigured ? 1 : 0,
+        next.notifiedCount ?? 0,
+        feeds.length,
+        recent.length,
+        recent[0]?.id ?? '',
+        history.length,
+        history[0]?.timestamp ?? '',
+        settings.checkInterval ?? 0,
+        settings.enabled ? 1 : 0,
+        scheduleFingerprint(settings.schedule),
+      ].join('|');
+      if (fingerprint !== lastFingerprint.current) {
+        lastFingerprint.current = fingerprint;
         setStatus(next);
         // Mirror the freshest status to module scope so the next remount of
         // this tab (e.g. when the user navigates to a different settings
         // page and back) starts with up-to-date data instead of defaults.
-        lastKnownStatus = next;
+        // We project to a slim snapshot to avoid retaining the heavy
+        // recentItems / history arrays across remount cycles.
+        lastKnownStatus = {
+          running: next.running,
+          enabled: next.enabled,
+          lastCheck: next.lastCheck,
+          nextCheckAt: next.nextCheckAt,
+          emailConfigured: next.emailConfigured,
+          notifiedCount: next.notifiedCount,
+          settings: next.settings,
+          feeds: next.feeds,
+        };
       }
     } catch (error) {
       setNotice({ type: 'error', text: `${tr('操作失败')}: ${shortErrorText(error.message)}` });
