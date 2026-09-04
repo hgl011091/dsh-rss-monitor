@@ -1,0 +1,6 @@
+# Simple gitignore
+node_modules/
+*.tgz
+.tmp/
+debug.log
+package/

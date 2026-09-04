@@ -1,0 +1,65 @@
+{
+  "name": "dsh-rss-monitor",
+  "version": "0.2.2",
+  "description": "RSS 订阅监控插件：定时检查 RSS 源、关键词过滤、邮件通知，并以原生设置页接入 DeepSeek Harness。 Monitor RSS feeds on a schedule, filter by keywords, and get email notifications, as a native DeepSeek Harness settings page.",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "rss",
+    "monitor",
+    "notification",
+    "email",
+    "feed"
+  ],
+  "author": {
+    "name": "dsh-rss contributors"
+  },
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hgl011091/dsh-rss-monitor.git"
+  },
+  "homepage": "https://github.com/hgl011091/dsh-rss-monitor#readme",
+  "bugs": "https://github.com/hgl011091/dsh-rss-monitor/issues",
+  "main": "./lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "plugin-src",
+    "src",
+    "cordis.patch.yml",
+    "LICENSE",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-locale"
+      ],
+      "platform": "web"
+    }
+  },
+  "scripts": {
+    "build": "node plugin-src/client/build.mjs && node plugin-src/host/build.mjs",
+    "test": "node --test test/*.test.mjs",
+    "check": "npm run build && npm test"
+  },
+  "engines": {
+    "node": ">=22.19"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
