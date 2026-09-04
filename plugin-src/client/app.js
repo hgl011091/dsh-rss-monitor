@@ -30,7 +30,7 @@ function shortErrorText(message) {
   return firstLine.length > 96 ? `${firstLine.slice(0, 96)}…` : firstLine;
 }
 
-function Switch({ on, onChange, disabled, label }) {
+const Switch = React.memo(function Switch({ on, onChange, disabled, label }) {
   return h('button', {
     type: 'button',
     className: `drss-switch${on ? ' drss-switchOn' : ''}`,
@@ -42,7 +42,7 @@ function Switch({ on, onChange, disabled, label }) {
   h('span', { className: 'drss-switchTrack', 'aria-hidden': 'true' },
     h('span', { className: 'drss-switchKnob' })),
   label ? h('span', { className: 'drss-switchLabel' }, label) : null);
-}
+});
 
 /**
  * Toast rendered entirely inside the plugin's own React tree: nothing is
@@ -55,7 +55,7 @@ function Switch({ on, onChange, disabled, label }) {
  * right/bottom) to that rect's bottom-right corner. The rect does not change
  * when panels switch, so every menu shows the toast at the same point.
  */
-function Notice({ notice, onDismiss }) {
+const Notice = React.memo(function Notice({ notice, onDismiss }) {
   const wrapRef = React.useRef(null);
   React.useEffect(() => {
     if (!notice) return undefined;
@@ -107,7 +107,7 @@ function Notice({ notice, onDismiss }) {
       onClick: onDismiss,
       'aria-label': tr('取消'),
     }, '×')));
-}
+});
 
 /**
  * In-app confirmation dialog replacing the native confirm(): native dialogs
@@ -115,7 +115,7 @@ function Notice({ notice, onDismiss }) {
  * unresponsive afterwards. This one is plain React, styled like the rest of
  * the plugin, Escape/backdrop cancels and Enter confirms.
  */
-function ConfirmDialog({ options, onClose }) {
+const ConfirmDialog = React.memo(function ConfirmDialog({ options, onClose }) {
   React.useEffect(() => {
     const onKey = (event) => {
       if (event.key === 'Escape') onClose(false);
@@ -146,13 +146,13 @@ function ConfirmDialog({ options, onClose }) {
         autoFocus: true,
         onClick: () => onClose(true),
       }, options.confirmLabel))));
-}
+});
 
-function StatusCard({ label, value, tone }) {
+const StatusCard = React.memo(function StatusCard({ label, value, tone }) {
   return h('div', { className: 'drss-statusCard' },
     h('dt', null, label),
     h('dd', { className: tone === 'run' ? 'drss-statusRun' : tone === 'stop' ? 'drss-statusStop' : undefined }, value));
-}
+});
 
 const ItemCard = React.memo(function ItemCard({ item }) {
   const thumb = item.thumbnail
@@ -763,7 +763,24 @@ export function RssSettingsTab({ rpcCall, version = '0.2.0' }) {
   const [notice, setNotice] = React.useState(null);
   const [busy, setBusy] = React.useState(false);
   const [confirmState, setConfirmState] = React.useState(null);
-  const rpc = React.useCallback(async (endpoint, payload) => unwrapRssRpc(await rpcCall(endpoint, payload ?? {})), [rpcCall]);
+
+  // Stash the host-supplied rpcCall in a ref and expose a stable wrapper.
+  // The previous design wrapped rpcCall in a useCallback with [rpcCall];
+  // the host passes a new function on every render, so that callback's
+  // identity changed every render, which in turn made `refresh` (and
+  // therefore `run`, and therefore every panel's onClick handlers) a
+  // fresh reference on every render. Net effect: a 15 s status poll that
+  // changed *anything* in the parent rebuilt every closure in the tree
+  // and re-bound every useEffect with `refresh` in its dep list (the
+  // status-poll timer, the schedule-form's dropDraft effect, etc.).
+  // Reading through a ref keeps the wrapper identity stable for the
+  // entire lifetime of the tab and lets the effect deps below stay
+  // empty, so the timer is bound exactly once.
+  const rpcCallRef = React.useRef(rpcCall);
+  React.useEffect(() => { rpcCallRef.current = rpcCall; }, [rpcCall]);
+  const rpc = React.useCallback(async (endpoint, payload) => {
+    return unwrapRssRpc(await rpcCallRef.current(endpoint, payload ?? {}));
+  }, []);
 
   const confirmAction = React.useCallback((options) => new Promise((resolve) => {
     // Re-opening while a previous dialog is still pending auto-cancels it so
@@ -868,12 +885,17 @@ export function RssSettingsTab({ rpcCall, version = '0.2.0' }) {
     }
   }, [refresh]);
 
-  const views = [
+  // Memo the rail-button descriptor list so a status poll that updates
+  // `status` (a new object reference every poll) doesn't force the rail
+  // nav to re-reconcile four buttons it didn't actually need to. The
+  // count field is the only thing that ever changes in practice; the
+  // labels never change between renders in a single locale.
+  const views = React.useMemo(() => [
     { id: 'overview', label: tr('概览') },
     { id: 'feeds', label: tr('RSS 源'), count: status.feeds?.length ?? 0 },
     { id: 'email', label: tr('邮件通知') },
     { id: 'settings', label: tr('运行设置') },
-  ];
+  ], [status.feeds?.length]);
 
   return h('section', { className: 'drss-page', 'aria-label': tr('RSS 监控') },
     h('header', { className: 'drss-title' },

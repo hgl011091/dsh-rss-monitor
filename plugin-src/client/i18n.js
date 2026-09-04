@@ -110,17 +110,34 @@ export const zh = Object.freeze(Object.fromEntries(
 ));
 
 let translator = null;
+// Per-translator cache of resolved strings. setRssTranslator flushes
+// the cache (a new translator may return a different string for the
+// same key, e.g. when the user switches locale). tr() is on the hot
+// path — every status poll re-renders the page and calls tr() many
+// times — and the host's locale.bind call is not free (it crosses
+// into a separate component). Caching the key→string answer keeps
+// the steady-state cost at one Map.get per call.
+//
+// A small Map (the panel uses ~30 distinct keys) hits the prototype
+// fast path and avoids the cost of allocating the cache key object
+// that a plain object property bag would imply.
+const trCache = new Map();
 
 /** Install the namespace translator; used by apply() after locale.bind(). */
 export function setRssTranslator(t) {
   translator = typeof t === 'function' ? t : null;
+  trCache.clear();
 }
 
 /** Translate a source string with the registered translator (identity fallback). */
 export function tr(key) {
-  if (translator) {
-    const value = translator(key);
-    if (typeof value === 'string' && value) return value;
+  if (!translator) return key;
+  const cached = trCache.get(key);
+  if (cached !== undefined) return cached;
+  const value = translator(key);
+  if (typeof value === 'string' && value) {
+    trCache.set(key, value);
+    return value;
   }
   return key;
 }
