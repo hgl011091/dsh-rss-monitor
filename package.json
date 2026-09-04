@@ -1,7 +1,7 @@
 {
   "name": "dsh-rss-monitor",
-  "version": "0.2.0",
-  "description": "RSS 订阅监控插件：定时检查 RSS 源、关键词过滤、邮件通知，并以原生设置页接入 DeepSeek Harness。 Monitor RSS feeds on a schedule, filter by keywords, and get email notifications, as a native DeepSeek Harness settings page.",
+  "version": "0.2.1",
+  "description": "RSS 璁㈤槄鐩戞帶鎻掍欢锛氬畾鏃舵鏌?RSS 婧愩€佸叧閿瘝杩囨护銆侀偖浠堕€氱煡锛屽苟浠ュ師鐢熻缃〉鎺ュ叆 DeepSeek Harness銆?Monitor RSS feeds on a schedule, filter by keywords, and get email notifications, as a native DeepSeek Harness settings page.",
   "keywords": [
     "deepseek-harness",
     "dsh",
