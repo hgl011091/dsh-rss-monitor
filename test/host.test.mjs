@@ -188,3 +188,96 @@ test('createRssHostPlugin restores an enabled monitor and accepts controller inj
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test('FeedFetcher.translateTimeoutError maps rss-parser English timeout to Chinese "超时（30 秒）"', async () => {
+  // rss-parser surfaces its network timeout as an AbortError with the
+  // English message "Request timed out after 30000ms". The DSH UI shows
+  // this string verbatim in the check history, so FeedFetcher rewrites
+  // it to a short Chinese label that also carries the configured timeout
+  // so the user can tell whether 30 s was the ceiling.
+  const fetcher = new FeedFetcher({
+    parser: {
+      parseURL: async () => {
+        const error = new Error('Request timed out after 30000ms');
+        error.code = 'ECONNABORTED';
+        throw error;
+      },
+    },
+  });
+  await assert.rejects(
+    () => fetcher.parseFeed('https://example.test/feed.xml'),
+    (err) => err.message === '超时（30 秒）' && err.code === 'feed-timeout' && err.cause === undefined || err.cause?.message === 'Request timed out after 30000ms',
+  );
+});
+
+test('FeedFetcher translates HTTP 429 too many requests to Chinese', async () => {
+  // undici (rss-parser's transport) raises an error with a generic
+  // "Status code 429" message. We want the DSH history to show a
+  // human-readable phrase, with the numeric code preserved.
+  const fetcher = new FeedFetcher({
+    parser: {
+      parseURL: async () => {
+        const error = new Error('Status code 429');
+        error.response = { statusCode: 429 };
+        throw error;
+      },
+    },
+  });
+  await assert.rejects(
+    () => fetcher.parseFeed('https://example.test/feed.xml'),
+    (err) => err.message === '请求过于频繁' && err.code === 'http-429',
+  );
+});
+
+test('FeedFetcher translates ENOTFOUND to "找不到主机"', async () => {
+  // Node-style network errors carry a `code` field. We map common
+  // codes to short Chinese labels and keep `code` for programmatic
+  // use.
+  const fetcher = new FeedFetcher({
+    parser: {
+      parseURL: async () => {
+        const error = new Error('getaddrinfo ENOTFOUND example.test');
+        error.code = 'ENOTFOUND';
+        throw error;
+      },
+    },
+  });
+  await assert.rejects(
+    () => fetcher.parseFeed('https://example.test/feed.xml'),
+    (err) => err.message === '找不到主机' && err.code === 'ENOTFOUND',
+  );
+});
+
+test('FeedFetcher translates XML parse errors to "订阅内容解析失败"', async () => {
+  // rss-parser reports malformed XML with a "Non-whitespace before first
+  // tag" message. Map that to a Chinese phrase so the user knows the
+  // feed is broken, not the network.
+  const fetcher = new FeedFetcher({
+    parser: {
+      parseURL: async () => {
+        throw new Error('This XML document is invalid, likely not well-formed XML');
+      },
+    },
+  });
+  await assert.rejects(
+    () => fetcher.parseFeed('https://example.test/feed.xml'),
+    (err) => err.message === '订阅内容解析失败' && err.code === 'feed-parse',
+  );
+});
+
+test('FeedFetcher falls back to "RSS 源不可用" for unknown errors', async () => {
+  // Anything we cannot classify is wrapped in a Chinese placeholder so
+  // the UI never shows raw English again; the original error stays
+  // attached as `cause` for log-side debugging.
+  const fetcher = new FeedFetcher({
+    parser: {
+      parseURL: async () => {
+        throw new Error('something exotic');
+      },
+    },
+  });
+  await assert.rejects(
+    () => fetcher.parseFeed('https://example.test/feed.xml'),
+    (err) => err.message === 'RSS 源不可用' && err.cause?.message === 'something exotic',
+  );
+});
