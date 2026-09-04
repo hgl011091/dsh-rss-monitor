@@ -6,7 +6,7 @@ import { installRssStyles } from './styles.js';
 import { RssSettingsTab } from './app.js';
 
 export const name = 'dsh-rss-monitor';
-export const version = '0.2.0';
+export const version = '0.2.6';
 export const inject = ['slots', 'connection', 'locale'];
 
 export function apply(ctx) {

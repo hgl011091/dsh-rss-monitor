@@ -51,16 +51,18 @@ await build({
 const loaderId = 'dsh-rss-monitor';
 let body = await readFile(outputPath, 'utf8');
 
-// Rewrite every literal that looks like a version string ("0.1.0" or
-// '0.1.0') in the bundle to the package.json version. The two places
+// Rewrite every literal that looks like a semver string ("0.1.0" or
+// '2.4.0') in the bundle to the package.json version. The two places
 // where this matters in plugin-src are:
-//   - `export const version = '0.1.0'` in client/index.js
-//   - `version = '0.1.0'` default in RssSettingsTab's signature
+//   - `export const version = '0.2.0'` in client/index.js
+//   - `version = '0.2.0'` default in RssSettingsTab's signature
 // Esbuild keeps these as raw string literals in the CJS bundle, so a
 // targeted replacement is the simplest way to keep them in lockstep
 // with the package manifest without coupling the source files to a
-// preprocessor.
-body = body.replace(/['"]0\.1\.0['"]/g, JSON.stringify(packageVersion));
+// preprocessor. The pattern matches any triple of digit-dot-digit-dot-
+// digit in single or double quotes so adding a new literal later
+// (or bumping a default) cannot accidentally bypass the rewrite.
+body = body.replace(/['"]\d+\.\d+\.\d+['"]/g, JSON.stringify(packageVersion));
 await writeFile(outputPath, [
   `window.__ModuleLoader__.load({`,
   `  id: ${JSON.stringify(loaderId)},`,

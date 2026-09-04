@@ -1,7 +1,7 @@
 {
   "name": "dsh-rss-monitor",
-  "version": "0.2.5",
-  "description": "RSS 订阅监控插件：定时检查 RSS 源、关键词过滤、邮件通知，并以原生设置页接入 DeepSeek Harness。 Monitor RSS feeds on a schedule, filter by keywords, and get email notifications, as a native DeepSeek Harness settings page. v0.2.4 fixes the \"Dynamic require of events is not supported\" crash on DSH 2.0.4+ by emitting a pure ESM lib/index.js (rss-parser and nodemailer are loaded as real ESM dependencies instead of being bundled as CJS). v0.2.3/0.2.2 omitted README/LICENSE/cordis.patch.yml from the tarball.",
+  "version": "0.2.6",
+  "description": "RSS 订阅监控插件：定时检查 RSS 源、关键词过滤、邮件通知，并以原生设置页接入 DeepSeek Harness。 Monitor RSS feeds on a schedule, filter by keywords, and get email notifications, as a native DeepSeek Harness settings page. v0.2.6 fixes the hardcoded version 0.2.0 in the client bundle and rewrites the build script so the bundled version always tracks package.json. v0.2.5 publishes a pure ESM lib/index.js (rss-parser and nodemailer are real ESM dependencies instead of bundled CJS). Earlier 0.2.0/0.2.1 omitted README/LICENSE/cordis.patch.yml from the tarball.",
   "keywords": [
     "deepseek-harness",
     "dsh",
