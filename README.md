@@ -4,14 +4,26 @@
 
 **DeepSeek Harness 原生 RSS 订阅监控插件 —— 定时检查、关键词过滤、新条目邮件通知，原生设置页体验**
 
-多源订阅 · 关键词过滤 · 智能去重 · HTML 邮件通知 · 凭据安全存储
+多源订阅 · 关键词过滤 · 时间窗口 · 智能去重 · HTML 邮件通知 · 凭据安全存储
 
 ![DSH Plugin](https://img.shields.io/badge/DeepSeek%20Harness-plugin-6366f1)
+![Version](https://img.shields.io/badge/version-0.2.0-blue)
 ![Node](https://img.shields.io/badge/node-%E2%89%A522.19-339933?logo=nodedotjs&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-37%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-58%20passing-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 </div>
+
+---
+
+## 🆕 v0.2.0 新增
+
+- 🗓️ **时间窗口** — 自定义每周某几天 + 起止时间，只在窗口期内检查与通知；支持跨夜（22:00–06:00）；固定系统时区
+- 🎨 **保存按钮移出方框** — 时间区间的"保存"按钮在方框外面、右对齐
+- ⚡ **5 轮性能优化** — rpc 身份稳定、5 个 React.memo、i18n Map 缓存、fingerprint 差异、host 端 status memo
+- 🐛 **修复** — 陈旧 `timezone: "UTC"` 字段自动规范化为 `system`；协议层 schedule 传递
+
+完整更新说明见 [Releases](https://github.com/hgl011091/dsh-rss-monitor/releases/tag/v0.2.0)
 
 ---
 
@@ -22,6 +34,7 @@
 | 📡 | **多源订阅** | RSS 2.0 / Atom 均支持；添加前可「测试连接」预览标题与最新条目 |
 | 🔍 | **关键词过滤** | 每源独立的**包含/排除**关键词（匹配标题与摘要），多个关键词逗号分隔 |
 | ⏰ | **定时检查** | 间隔 1–1440 分钟可调（默认 5 分钟）；顶部开关启停监控；随时手动「立即检查」 |
+| 🗓️ | **时间窗口** | **v0.2.0+** 自定义每周某几天 + 具体起止时间，只在窗口期内检查与通知；支持跨夜（22:00–06:00）与系统时区 |
 | 🧹 | **智能去重** | `md5(feedUrl\|guid\|\|link\|\|title)` 前 16 位作为稳定 id，环形窗口上限 1000 条 |
 | 📧 | **邮件通知** | SMTP（SSL 465 等），精美 HTML 模板带缩略图卡片，2s/4s 指数退避重试，可发测试邮件 |
 | 🖥️ | **原生设置页** | 通过 slots 注入 Harness 设置界面：概览 / RSS 源 / 邮件通知 / 运行设置 四个页签，中英双语 |
@@ -29,8 +42,7 @@
 | 🔢 | **显示条数可调** | 「最近发现」与「检查历史」各 1–100 行自行设置，已记录条目始终显示真实总数 |
 | 🔄 | **自动刷新** | 设置页每 15 秒拉取状态，数据无变化不重渲染，窗口后台自动暂停轮询 |
 | 🔒 | **凭据安全** | SMTP 密码只存 Harness 凭据库（`DSH_RSS_SMTP_PASS_*`），配置文件中仅存引用 `passRef`，界面与磁盘永不见明文 |
-
-> 🧪 **实验性 / 隐藏功能**:`v0.2.0+` 代码中已实现一些尚未在此 README 文档化的功能（例如「运行设置」中的「时间区间」折叠区：可按星期 + 起止时间限制监控只在窗口内运行，支持跨夜 22:00–06:00 与 UTC / 系统时区）。这些功能在安装后的设置页可见，但出于稳定性考虑暂未列入正式说明。遇到问题请到 [issues](https://github.com/hgl011091/dsh-rss-monitor/issues) 反馈。
+| ⚡ | **性能优化** | 5 轮优化：rpc 身份稳定、组件 memo、Map 缓存、fingerprint 差异、host 端 status memo |
 
 ## 📸 界面预览
 
@@ -62,7 +74,7 @@
 
 | 你的情况 | 路径 | 网络要求 |
 |---|---|---|
-| 本包已发布 npm（v0.1.0 起），任何网络 | **方式一**（推荐） | npm registry（国内可达） |
+| 本包已发布 npm（v0.1.0 起，最新 0.2.0），任何网络 | **方式一**（推荐） | npm registry（国内可达） |
 | 能直连 GitHub（境外/有代理） | 方式二 | codeload.github.com |
 | 想用预构建包、不想等 npm | 方式三 | github.com Releases |
 | 离线 / 开发联动 / 发布前的兜底 | 方式四 | 无（本地 clone） |
@@ -73,18 +85,18 @@
 
 ```bash
 # DSH Desktop（务必带 @精确版本 + --save-exact，见下方 ⚠）
-dsh plugin --profile desktop add -wE "dsh-rss-monitor@0.1.0"
+dsh plugin --profile desktop add -wE "dsh-rss-monitor@0.2.0"
 
 # DSH Web
-dsh plugin --profile web add dsh-rss-monitor
+dsh plugin --profile web add dsh-rss-monitor@0.2.0
 ```
 
 完成后启动 DSH Desktop（或刷新 `dsh web` 页面），设置 → 「RSS 监控」。
 
-> ⚠️ **Desktop 专有坑：依赖必须是精确版本。** 桌面端的 bundle 加载器只解析 `dsh.profile.bundles` 中**精确版本**的 profile 依赖；pnpm 默认写入的 `^0.1.0` 范围值会被**静默跳过**——装完、重启都不生效，且无任何报错。所以：
-> 1. 安装时带 `@0.1.0` 并加 `-E`（`--save-exact`）；
-> 2. 装完自检：打开 `%USERPROFILE%\.dsh\profiles\desktop\package.json`，`dependencies` 里应是 `"dsh-rss-monitor": "0.1.0"`（**没有** `^`），且 `dsh.profile.bundles` 数组里含 `"dsh-rss-monitor"`；
-> 3. 若版本带 `^`，用 `pnpm remove -w dsh-rss-monitor` 再 `pnpm add -wE "dsh-rss-monitor@0.1.0"` 重装（需先完全退出 DSH）。
+> ⚠️ **Desktop 专有坑：依赖必须是精确版本。** 桌面端的 bundle 加载器只解析 `dsh.profile.bundles` 中**精确版本**的 profile 依赖；pnpm 默认写入的 `^0.2.0` 范围值会被**静默跳过**——装完、重启都不生效，且无任何报错。所以：
+> 1. 安装时带 `@0.2.0` 并加 `-E`（`--save-exact`）；
+> 2. 装完自检：打开 `%USERPROFILE%\.dsh\profiles\desktop\package.json`，`dependencies` 里应是 `"dsh-rss-monitor": "0.2.0"`（**没有** `^`），且 `dsh.profile.bundles` 数组里含 `"dsh-rss-monitor"`；
+> 3. 若版本带 `^`，用 `pnpm remove -w dsh-rss-monitor` 再 `pnpm add -wE "dsh-rss-monitor@0.2.0"` 重装（需先完全退出 DSH）。
 
 ### 方式二：GitHub 源安装（需直连 GitHub）
 
@@ -177,8 +189,26 @@ Get-Content "$env:USERPROFILE\.dsh\profiles\desktop\cordis.yml" -Raw
 
 1. **RSS 源** → 「+ 添加 RSS 源」，填名称与 URL，可选关键词过滤，先「测试连接」再保存
 2. **邮件通知** → 填 SMTP 主机/端口/账号/密码/收件人，保存后「发送测试邮件」验证（各大邮箱需使用授权码）
-3. **运行设置** → 调整检查间隔与「最近发现 / 检查历史」显示条数；顶部开关启动/停止监控
+3. **运行设置** → 调整检查间隔与「最近发现 / 检查历史」显示条数；可选**时间窗口**只在指定时段运行；顶部开关启动/停止监控
 4. **概览** → 查看运行状态、最近发现的新条目与检查历史；支持一键清除（带确认弹窗）
+
+### 🗓️ 时间窗口 (v0.2.0+)
+
+**「运行设置」页 → 时间区间** 支持自定义监控只在每周的特定时间段运行：
+
+| 字段 | 说明 |
+|---|---|
+| **启用时间区间** | 总开关。关闭后回到 7×24 全天候运行（legacy 行为）|
+| **星期** | 周日 ~ 周六多选；不选任何天 = 每天都生效 |
+| **开始时间 / 结束时间** | HH:MM 格式；支持跨夜窗口（如 22:00–06:00）；起止相同时按 24h 窗口处理 |
+| **时区** | 固定为系统时区（移除 UTC 选项以避免混淆）|
+
+窗口外时：
+- ⏸️ **定时器暂停拉取** — 节省网络与 CPU
+- 🔕 **不发送邮件通知** — 避免非工作时间打扰
+- 🪟 **UI 实时显示** — 显示「当前在窗口内 / 外 / 未启用」
+
+> 💡 **典型用法**：工作日 9:00–18:00 监控；周末全天关闭；深夜免打扰。
 
 ## 🏗️ 架构
 
@@ -210,7 +240,7 @@ dsh-rss-monitor/
 
 ```bash
 npm install
-npm run check   # 构建两端 bundle + 运行全部 37 个单元测试
+npm run check   # 构建两端 bundle + 运行全部 58 个单元测试
 npm test        # 仅跑测试（node:test）
 ```
 
