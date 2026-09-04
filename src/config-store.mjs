@@ -12,6 +12,13 @@ import { normalizeConfig } from './protocol.mjs';
 export class RssConfigStore {
   #path;
   #value = null;
+  // Snapshot returned by the last get(). Kept in sync with #value on save.
+  // get() returns structuredClone to protect callers from mutating the
+  // store's private state, but the clone was being redone on every RPC
+  // status call (every 15 s) even though the config hadn't changed.
+  // Returning the same pre-built clone skips a deep walk of the config
+  // tree (feeds, settings, display, email) on the hot path.
+  #snapshot = null;
   #queue = Promise.resolve();
   #logger;
 
@@ -35,11 +42,12 @@ export class RssConfigStore {
         this.#value = normalizeConfig({});
       }
     }
+    this.#snapshot = structuredClone(this.#value);
     return this;
   }
 
   get() {
-    return this.#value ? structuredClone(this.#value) : null;
+    return this.#snapshot ? structuredClone(this.#snapshot) : null;
   }
 
   async save(value) {
@@ -51,6 +59,7 @@ export class RssConfigStore {
       await writeFile(temporary, `${JSON.stringify(normalized, null, 2)}\n`, { mode: 0o600 });
       await rename(temporary, this.#path);
       this.#value = normalized;
+      this.#snapshot = structuredClone(normalized);
     });
     this.#queue = operation.then(() => undefined, () => undefined);
     await operation;

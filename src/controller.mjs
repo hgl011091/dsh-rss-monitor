@@ -42,6 +42,21 @@ export class RssController {
   #credentials;
   #logger;
   #onChanged;
+  // Cached status payload. Recomputed only when the underlying config
+  // or state changes (saveFeed / saveSettings / saveEmail / state save
+  // after a check) or when the monitor's running / nextCheckAt flips.
+  // The settings tab polls `status` every 15 s; without this cache the
+  // controller was rebuilding the full payload (two structuredClone
+  // walks + feeds.map + recentItems.sort) on every tick, even when the
+  // data was byte-for-byte identical to the last poll.
+  #cachedStatus = null;
+  // Lightweight dirty flags. Any mutation path sets the matching flag
+  // and the next `status()` call rebuilds the cache once. The monitor
+  // flip covers isRunning() / getNextCheckAt() which live outside the
+  // stores and would otherwise be missed.
+  #configDirty = true;
+  #stateDirty = true;
+  #monitorDirty = true;
 
   constructor({
     configStore,
@@ -85,11 +100,19 @@ export class RssController {
   }
 
   async status() {
+    // Short-circuit when nothing has changed since the last call. The
+    // monitor flip covers isRunning() / getNextCheckAt(); the store
+    // flags cover config saves and post-check state writes. Returning
+    // the cached object is safe because the client treats the payload
+    // as read-only and the next mutation will rebuild it.
+    if (!this.#configDirty && !this.#stateDirty && !this.#monitorDirty && this.#cachedStatus) {
+      return this.#cachedStatus;
+    }
     const config = this.#configStore.get();
     const state = this.#stateStore.get();
     const settings = config?.settings;
     const display = config?.display ?? DEFAULT_DISPLAY;
-    return {
+    const status = {
       running: this.#monitor.isRunning(),
       enabled: settings?.enabled === true,
       lastCheck: state?.lastCheck ?? null,
@@ -129,6 +152,28 @@ export class RssController {
       history: (state?.history ?? []).slice(0, display.historyItems),
       notifiedCount: state?.notifiedItems.length ?? 0,
     };
+    this.#cachedStatus = status;
+    this.#configDirty = false;
+    this.#stateDirty = false;
+    this.#monitorDirty = false;
+    return status;
+  }
+
+  /** Mark the cached status as needing a rebuild; called by the monitor
+   *  when its running/nextCheckAt state changes, and by save* methods
+   *  after the underlying store has been written. */
+  #invalidateStatus() {
+    this.#configDirty = true;
+    this.#stateDirty = true;
+  }
+
+  /** Public hook for the monitor to call after a periodic check writes
+   *  state. The monitor's setInterval bypasses the controller's RPC
+   *  handlers, so this is the only way the periodic path can invalidate
+   *  the cache. Kept as a method (not a getter) so the host can pass
+   *  `controller.onStateChanged` directly to the monitor constructor. */
+  onStateChanged() {
+    this.#stateDirty = true;
   }
 
   async testFeed({ url } = {}) {
@@ -177,6 +222,7 @@ export class RssController {
       feeds.push(normalized);
     }
     await this.#configStore.save({ ...config, feeds });
+    this.#invalidateStatus();
     this.#emitChanged();
     return { feeds: (await this.status()).feeds };
   }
@@ -191,6 +237,7 @@ export class RssController {
       throw error;
     }
     await this.#configStore.save({ ...config, feeds });
+    this.#invalidateStatus();
     this.#emitChanged();
     return { feeds: (await this.status()).feeds };
   }
@@ -225,6 +272,8 @@ export class RssController {
     const nextDisplay = normalizeDisplay(display === undefined ? config.display : { ...config.display, ...display });
     await this.#configStore.save({ ...config, settings, display: nextDisplay });
     this.#monitor.applySettings(settings);
+    this.#monitorDirty = true;
+    this.#invalidateStatus();
     this.#emitChanged();
     return {
       settings,
@@ -237,6 +286,10 @@ export class RssController {
   async checkNow() {
     const result = await this.#monitor.checkNow(true);
     const state = this.#stateStore.get();
+    // A manual check always writes state (new lastCheck, new history
+    // entry) and may produce new recentItems; mark the cache dirty so
+    // the next status() rebuild picks all of it up.
+    this.#stateDirty = true;
     return {
       ...result,
       lastCheck: state.lastCheck,
@@ -278,6 +331,7 @@ export class RssController {
       throw error;
     }
     await this.#configStore.save({ ...config, email });
+    this.#invalidateStatus();
     this.#emitChanged();
     return { emailConfigured: this.#notifier.isConfigured(email) };
   }
@@ -321,6 +375,7 @@ export class RssController {
       }
     }
     await this.#configStore.save({ ...config, email: null });
+    this.#invalidateStatus();
     this.#emitChanged();
     return { email: null };
   }
@@ -328,6 +383,7 @@ export class RssController {
   async clearItems() {
     const state = this.#stateStore.get();
     await this.#stateStore.save({ ...state, notifiedItems: [], recentItems: [] });
+    this.#stateDirty = true;
     this.#emitChanged();
     return { ok: true };
   }
@@ -335,6 +391,7 @@ export class RssController {
   async clearHistory() {
     const state = this.#stateStore.get();
     await this.#stateStore.save({ ...state, history: [] });
+    this.#stateDirty = true;
     this.#emitChanged();
     return { ok: true };
   }

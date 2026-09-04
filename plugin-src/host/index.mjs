@@ -51,6 +51,15 @@ export function createRssHostPlugin(internals = {}) {
         logger,
       });
 
+      // Mutable holder so the monitor's onStateChanged callback can
+      // reach the controller once both are constructed. The controller
+      // needs the monitor for checkNow / applySettings / isRunning, and
+      // the monitor needs the controller to invalidate its cached
+      // status after a periodic check writes new state. A holder breaks
+      // the construction-order deadlock without exposing either side
+      // to a partially-initialised peer.
+      const monitorHolder = { current: null };
+
       const monitor = internals.monitor ?? new RssMonitor({
         configStore,
         stateStore,
@@ -64,6 +73,7 @@ export function createRssHostPlugin(internals = {}) {
           await notifier.send(email, items);
         },
         logger,
+        onStateChanged: () => monitorHolder.current?.onStateChanged?.(),
       });
 
       const controller = internals.controller ?? new RssController({
@@ -76,6 +86,7 @@ export function createRssHostPlugin(internals = {}) {
         logger,
       });
       RssController.assertComplete(controller);
+      monitorHolder.current = controller;
 
       let rpcDisposer = null;
       if (ctx?.connection?.rpc) {

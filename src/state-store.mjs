@@ -50,6 +50,11 @@ function sanitizeHistoryEntry(value) {
 export class RssStateStore {
   #path;
   #value = RssStateStore.empty();
+  // Cached clone returned by get(). Re-cloned only when save() writes a
+  // new #value, so the 15 s status poll (which does not modify state)
+  // reuses the same pre-built snapshot instead of walking the full
+  // notifiedItems / recentItems / history arrays every time.
+  #snapshot = null;
   #queue = Promise.resolve();
   #logger;
 
@@ -95,11 +100,12 @@ export class RssStateStore {
         this.#value = RssStateStore.empty();
       }
     }
+    this.#snapshot = structuredClone(this.#value);
     return this;
   }
 
   get() {
-    return structuredClone(this.#value);
+    return this.#snapshot ? structuredClone(this.#snapshot) : null;
   }
 
   async save(value) {
@@ -123,6 +129,7 @@ export class RssStateStore {
       await writeFile(temporary, `${JSON.stringify(normalized, null, 2)}\n`, { mode: 0o600 });
       await rename(temporary, this.#path);
       this.#value = normalized;
+      this.#snapshot = structuredClone(normalized);
     });
     this.#queue = operation.then(() => undefined, () => undefined);
     await operation;

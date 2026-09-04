@@ -51,6 +51,7 @@ export class RssMonitor {
   #setTimeout;
   #clearTimeout;
   #concurrency;
+  #onStateChanged;
   #timer = null;
   #startDelayTimer = null;
   #nextCheckAt = null;
@@ -66,6 +67,7 @@ export class RssMonitor {
     now = () => new Date().toISOString(),
     schedule = {},
     concurrency = 3,
+    onStateChanged,
   } = {}) {
     if (typeof fetchFeed !== 'function') throw new TypeError('RssMonitor requires fetchFeed()');
     this.#configStore = configStore;
@@ -75,6 +77,7 @@ export class RssMonitor {
     this.#logger = logger;
     this.#now = now;
     this.#concurrency = Math.max(1, Math.min(8, concurrency));
+    this.#onStateChanged = typeof onStateChanged === 'function' ? onStateChanged : null;
     this.#setInterval = schedule.setInterval ?? ((fn, ms) => {
       const timer = setInterval(fn, ms);
       timer?.unref?.();
@@ -234,6 +237,15 @@ export class RssMonitor {
       ].slice(0, LIMITS.maxHistoryEntries),
     };
     await this.#stateStore.save(updatedState);
+    // Notify the controller so it can invalidate its cached status
+    // payload. The periodic check bypasses the controller's RPC
+    // handlers (it runs on the monitor's own setInterval), so without
+    // this callback the next status() call would return a stale
+    // snapshot until a user action (save feed, save settings) happened
+    // to flip a dirty flag.
+    try { this.#onStateChanged?.(); } catch (error) {
+      this.#logger?.warn?.('[dsh-rss-monitor] onStateChanged callback failed', error);
+    }
 
     if (newItems.length > 0 && this.#notify) {
       try {
