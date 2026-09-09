@@ -152,6 +152,7 @@ test('createRssHostPlugin restores an enabled monitor and accepts controller inj
       fetcher: new FeedFetcher({ parser: { parseURL: async () => ({ title: 'x', items: [] }) } }),
       notifier: new EmailNotifier({
         createTransport: () => ({ async sendMail() {}, async verify() {} }),
+        resolveHost: async (host) => ({ host }),
         delay: async () => {},
       }),
       monitor: new FakeMonitor({
@@ -171,6 +172,7 @@ test('createRssHostPlugin restores an enabled monitor and accepts controller inj
       fetcher: new FeedFetcher({ parser: { parseURL: async () => ({ title: 'x', items: [] }) } }),
       notifier: new EmailNotifier({
         createTransport: () => ({ async sendMail() {}, async verify() {} }),
+        resolveHost: async (host) => ({ host }),
         delay: async () => {},
       }),
       installRpc: installRssRpc,

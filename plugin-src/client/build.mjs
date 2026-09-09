@@ -63,6 +63,22 @@ let body = await readFile(outputPath, 'utf8');
 // digit in single or double quotes so adding a new literal later
 // (or bumping a default) cannot accidentally bypass the rewrite.
 body = body.replace(/['"]\d+\.\d+\.\d+['"]/g, JSON.stringify(packageVersion));
+
+// Guard against the 0.2.7 incident: the 0.2.7 tarball shipped a client
+// bundle built while the tree was still 0.2.6 (package.json was bumped and
+// re-packed without rebuilding), so the installed settings tab displayed
+// v0.2.6 forever. After the rewrite above every semver literal in the
+// final artifact must equal package.json — refuse to emit otherwise.
+const staleVersions = [...body.matchAll(/['"](\d+\.\d+\.\d+)['"]/g)]
+  .map((match) => match[1])
+  .filter((literal) => literal !== packageVersion);
+if (staleVersions.length > 0) {
+  throw new Error(
+    `client bundle contains stale version literal(s) ${[...new Set(staleVersions)].join(', ')}`
+    + ` but package.json is ${packageVersion}; rebuild from bumped sources before shipping.`,
+  );
+}
+
 await writeFile(outputPath, [
   `window.__ModuleLoader__.load({`,
   `  id: ${JSON.stringify(loaderId)},`,

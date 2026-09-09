@@ -1,7 +1,7 @@
 {
   "name": "dsh-rss-monitor",
-  "version": "0.2.7",
-  "description": "RSS 订阅监控插件：定时检查 RSS 源、关键词过滤、邮件通知，并以原生设置页接入 DeepSeek Harness。 Monitor RSS feeds on a schedule, filter by keywords, and get email notifications, as a native DeepSeek Harness settings page. v0.2.6 fixes the hardcoded version 0.2.0 in the client bundle and rewrites the build script so the bundled version always tracks package.json. v0.2.5 publishes a pure ESM lib/index.js (rss-parser and nodemailer are real ESM dependencies instead of bundled CJS). Earlier 0.2.0/0.2.1 omitted README/LICENSE/cordis.patch.yml from the tarball.",
+  "version": "0.2.8",
+  "description": "RSS 订阅监控插件：定时检查 RSS 源、关键词过滤、邮件通知，并以原生设置页接入 DeepSeek Harness。 Monitor RSS feeds on a schedule, filter by keywords, and get email notifications, as a native DeepSeek Harness settings page. v0.2.8 fixes email delivery under TUN-mode proxies (nodemailer's c-ares queryA ETIMEOUT; SMTP hosts are now pre-resolved via the OS resolver with TLS SNI preserved) and fixes the stale client bundle that made the settings tab show v0.2.6 after installing 0.2.7 (build guard + prepack rebuild added). v0.2.6 fixed the hardcoded client version and made the build track package.json. v0.2.5 ships a pure ESM lib/index.js (rss-parser and nodemailer are real ESM dependencies instead of bundled CJS).",
   "keywords": [
     "deepseek-harness",
     "dsh",
@@ -55,7 +55,8 @@
   "scripts": {
     "build": "node plugin-src/client/build.mjs && node plugin-src/host/build.mjs",
     "test": "node --test test/*.test.mjs",
-    "check": "npm run build && npm test"
+    "check": "npm run build && npm test",
+    "prepack": "npm run build && node test/client-bundle.test.mjs"
   },
   "engines": {
     "node": ">=22.19"

@@ -2,10 +2,44 @@
  * Email notifications for newly discovered RSS items, built on nodemailer.
  * The SMTP password is resolved from the Harness credential store via
  * `passRef` and never persisted in config files or returned to the browser.
- * The transport factory is injectable for offline tests.
+ * The SMTP hostname is pre-resolved through the OS resolver (getaddrinfo):
+ * nodemailer's own `dns.resolve` (c-ares, raw UDP:53) times out under
+ * TUN-mode proxies (queryA ETIMEOUT smtp.qq.com), while getaddrinfo keeps
+ * working there. The transport factory and host resolver are injectable
+ * for offline tests.
  */
 
+import { lookup as dnsLookup } from 'node:dns/promises';
+import { isIP } from 'node:net';
+
 export const RETRY_DELAYS_MS = [2_000, 4_000];
+
+/**
+ * Build a host resolver backed by the OS resolver. Returns
+ * `{ host, servername }`: `host` is what nodemailer connects to (an IP when
+ * resolution succeeded, the original hostname otherwise), `servername` keeps
+ * the original hostname for TLS SNI/verification when an IP was substituted.
+ */
+export function systemResolveHost({ lookup = dnsLookup } = {}) {
+  return async (host) => {
+    if (isIP(host)) return { host, servername: undefined };
+    let addresses;
+    try {
+      addresses = await lookup(host, { all: true, verbatim: true });
+    } catch {
+      // Unresolvable here: fall back to nodemailer's own resolution so
+      // behaviour is never worse than before.
+      return { host, servername: undefined };
+    }
+    if (!Array.isArray(addresses) || addresses.length === 0) {
+      return { host, servername: undefined };
+    }
+    const picked = addresses.find((entry) => entry.family === 4) ?? addresses[0];
+    return { host: picked.address, servername: host };
+  };
+}
+
+export const defaultResolveHost = systemResolveHost();
 
 function escapeHtml(text) {
   if (!text) return '';
@@ -88,13 +122,15 @@ export function buildEmailHtml(items, { heading = 'RSS 监控' } = {}) {
 export class EmailNotifier {
   #credentials;
   #createTransport;
+  #resolveHost;
   #logger;
   #delay;
 
-  constructor({ credentials, createTransport, logger = console, delay = defaultDelay } = {}) {
+  constructor({ credentials, createTransport, resolveHost = defaultResolveHost, logger = console, delay = defaultDelay } = {}) {
     if (typeof createTransport !== 'function') throw new TypeError('EmailNotifier requires createTransport()');
     this.#credentials = credentials;
     this.#createTransport = createTransport;
+    this.#resolveHost = resolveHost;
     this.#logger = logger;
     this.#delay = delay;
   }
@@ -105,13 +141,26 @@ export class EmailNotifier {
     return Promise.resolve(credential).then((value) => value?.value ?? '');
   }
 
-  #transportOptions(config, password) {
-    return {
+  /** Build transport options, pre-resolving the SMTP host when possible. */
+  async #transportOptions(config, password) {
+    const base = {
       host: config.host,
       port: config.port,
       secure: config.secure,
       auth: config.user ? { user: config.user, pass: password } : undefined,
     };
+    try {
+      const resolved = await this.#resolveHost(config.host);
+      if (resolved?.host) {
+        base.host = resolved.host;
+        if (resolved.servername) base.tls = { ...(base.tls ?? {}), servername: resolved.servername };
+      }
+    } catch (error) {
+      // Resolver injection misbehaving must never block sending: nodemailer
+      // then falls back to its own (c-ares) resolution.
+      this.#logger?.warn?.(`[dsh-rss-monitor] host pre-resolve failed: ${error?.message}`);
+    }
+    return base;
   }
 
   isConfigured(config) {
@@ -142,7 +191,7 @@ export class EmailNotifier {
       throw error;
     }
     const password = await this.#resolvePassword(config);
-    const transport = this.#createTransport(this.#transportOptions(config, password));
+    const transport = this.#createTransport(await this.#transportOptions(config, password));
     try {
       await this.#withRetry(async () => {
         await transport.sendMail({
@@ -168,7 +217,7 @@ export class EmailNotifier {
       throw error;
     }
     const password = await this.#resolvePassword(config);
-    const transport = this.#createTransport(this.#transportOptions(config, password));
+    const transport = this.#createTransport(await this.#transportOptions(config, password));
     try {
       await this.#withRetry(async (attempt) => {
         if (attempt === 0) await transport.verify();

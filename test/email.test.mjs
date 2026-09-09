@@ -6,7 +6,18 @@ import {
   buildEmailText,
   EmailNotifier,
   RETRY_DELAYS_MS,
+  systemResolveHost,
 } from '../src/email-notifier.mjs';
+
+/** Offline stub: record the host and hand back a fixed resolution. */
+function stubResolveHost(result) {
+  const calls = [];
+  const resolveHost = async (host) => {
+    calls.push(host);
+    return typeof result === 'function' ? result(host) : result;
+  };
+  return { resolveHost, calls };
+}
 
 const ITEM = {
   id: 'abc123',
@@ -51,6 +62,7 @@ test('buildEmailHtml escapes content and embeds thumbnail and link', () => {
 test('EmailNotifier resolves the password through the credential store', async () => {
   const resolvedRefs = [];
   const transports = [];
+  const { resolveHost } = stubResolveHost({ host: '93.184.216.34', servername: 'smtp.a.com' });
   const notifier = new EmailNotifier({
     credentials: {
       resolve: (ref) => {
@@ -69,6 +81,7 @@ test('EmailNotifier resolves the password through the credential store', async (
       transports.push(transport);
       return transport;
     },
+    resolveHost,
     delay: async () => {},
   });
   const config = {
@@ -84,7 +97,8 @@ test('EmailNotifier resolves the password through the credential store', async (
   assert.deepEqual(resolvedRefs, ['DSH_RSS_SMTP_PASS_ABCDEF01ABCDEF01ABCDEF01']);
   assert.equal(transports.length, 1);
   assert.deepEqual(transports[0].options.auth, { user: 'bot@a.com', pass: 'secret-pass' });
-  assert.equal(transports[0].options.host, 'smtp.a.com');
+  assert.equal(transports[0].options.host, '93.184.216.34');
+  assert.deepEqual(transports[0].options.tls, { servername: 'smtp.a.com' });
   assert.equal(transports[0].options.port, 465);
   assert.equal(transports[0].sent[0].to, 'me@a.com');
   assert.equal(transports[0].sent[0].from, 'RSS <bot@a.com>');
@@ -96,6 +110,7 @@ test('EmailNotifier resolves the password through the credential store', async (
 test('EmailNotifier.sendTest verifies and reports incomplete configuration', async () => {
   let verified = 0;
   let sent = 0;
+  const { resolveHost } = stubResolveHost({ host: '93.184.216.34', servername: 'smtp.a.com' });
   const notifier = new EmailNotifier({
     credentials: { resolve: () => ({ value: 'pw' }) },
     createTransport: () => ({
@@ -106,6 +121,7 @@ test('EmailNotifier.sendTest verifies and reports incomplete configuration', asy
         sent += 1;
       },
     }),
+    resolveHost,
     delay: async () => {},
   });
   await notifier.sendTest({
@@ -129,6 +145,7 @@ test('EmailNotifier.sendTest verifies and reports incomplete configuration', asy
 test('EmailNotifier retries transient failures with backoff then succeeds', async () => {
   const delays = [];
   let attempts = 0;
+  const { resolveHost } = stubResolveHost((host) => ({ host }));
   const notifier = new EmailNotifier({
     credentials: { resolve: () => ({ value: 'pw' }) },
     createTransport: () => ({
@@ -137,6 +154,7 @@ test('EmailNotifier retries transient failures with backoff then succeeds', asyn
         if (attempts < 3) throw new Error('ECONNRESET');
       },
     }),
+    resolveHost,
     delay: async (ms) => delays.push(ms),
   });
   await notifier.send(
@@ -151,6 +169,7 @@ test('EmailNotifier surfaces a concise failure after exhausting retries', async 
   const delays = [];
   const logged = [];
   let attempts = 0;
+  const { resolveHost } = stubResolveHost((host) => ({ host }));
   const notifier = new EmailNotifier({
     credentials: { resolve: () => ({ value: 'pw' }) },
     logger: { warn: (msg) => logged.push(msg) },
@@ -160,6 +179,7 @@ test('EmailNotifier surfaces a concise failure after exhausting retries', async 
         throw new Error(`SMTP down (attempt ${attempts})`);
       },
     }),
+    resolveHost,
     delay: async (ms) => delays.push(ms),
   });
   await assert.rejects(
@@ -177,6 +197,7 @@ test('EmailNotifier surfaces a concise failure after exhausting retries', async 
 
 test('EmailNotifier works without stored credentials (no-auth relay)', async () => {
   const transports = [];
+  const { resolveHost } = stubResolveHost((host) => ({ host }));
   const notifier = new EmailNotifier({
     credentials: { resolve: () => undefined },
     createTransport: (options) => {
@@ -187,9 +208,87 @@ test('EmailNotifier works without stored credentials (no-auth relay)', async () 
       transports.push(transport);
       return transport;
     },
+    resolveHost,
     delay: async () => {},
   });
   await notifier.send({ host: 'relay.local', port: 25, secure: false, user: '', to: 'me@a.com' }, [ITEM]);
   assert.equal(transports[0].options.auth, undefined);
   assert.equal(transports[0].options.secure, false);
+});
+
+test('EmailNotifier keeps the original hostname when the resolver throws', async () => {
+  const logged = [];
+  const transports = [];
+  const notifier = new EmailNotifier({
+    credentials: { resolve: () => ({ value: 'pw' }) },
+    logger: { warn: (msg) => logged.push(msg) },
+    createTransport: (options) => {
+      const transport = { options, async sendMail() {} };
+      transports.push(transport);
+      return transport;
+    },
+    resolveHost: async () => {
+      throw new Error('resolver exploded');
+    },
+    delay: async () => {},
+  });
+  await notifier.send(
+    { host: 'smtp.a.com', port: 465, secure: true, user: 'u', to: 'me@a.com', passRef: 'DSH_RSS_SMTP_PASS_ABCDEF01ABCDEF01ABCDEF01' },
+    [ITEM],
+  );
+  assert.equal(transports[0].options.host, 'smtp.a.com');
+  assert.equal(transports[0].options.tls, undefined);
+  assert.ok(logged.some((line) => line.includes('host pre-resolve failed')));
+});
+
+test('EmailNotifier keeps the original hostname when the resolver returns garbage', async () => {
+  const transports = [];
+  const notifier = new EmailNotifier({
+    credentials: { resolve: () => ({ value: 'pw' }) },
+    createTransport: (options) => {
+      const transport = { options, async sendMail() {} };
+      transports.push(transport);
+      return transport;
+    },
+    resolveHost: async () => null,
+    delay: async () => {},
+  });
+  await notifier.send(
+    { host: 'smtp.a.com', port: 465, secure: true, user: 'u', to: 'me@a.com', passRef: 'DSH_RSS_SMTP_PASS_ABCDEF01ABCDEF01ABCDEF01' },
+    [ITEM],
+  );
+  assert.equal(transports[0].options.host, 'smtp.a.com');
+  assert.equal(transports[0].options.tls, undefined);
+});
+
+test('systemResolveHost prefers IPv4 and preserves the hostname for TLS', async () => {
+  const resolveHost = systemResolveHost({
+    lookup: async () => [
+      { address: '2001:db8::1', family: 6 },
+      { address: '93.184.216.34', family: 4 },
+    ],
+  });
+  assert.deepEqual(await resolveHost('smtp.a.com'), { host: '93.184.216.34', servername: 'smtp.a.com' });
+});
+
+test('systemResolveHost falls back to IPv6 when only AAAA exists', async () => {
+  const resolveHost = systemResolveHost({
+    lookup: async () => [{ address: '2001:db8::1', family: 6 }],
+  });
+  assert.deepEqual(await resolveHost('smtp.a.com'), { host: '2001:db8::1', servername: 'smtp.a.com' });
+});
+
+test('systemResolveHost passes IP literals through without servername', async () => {
+  const resolveHost = systemResolveHost({ lookup: async () => { throw new Error('must not be called'); } });
+  assert.deepEqual(await resolveHost('127.0.0.1'), { host: '127.0.0.1', servername: undefined });
+});
+
+test('systemResolveHost returns the hostname unchanged when lookup fails', async () => {
+  const resolveHost = systemResolveHost({ lookup: async () => { throw new Error('ENOTFOUND'); } });
+  assert.deepEqual(await resolveHost('smtp.a.com'), { host: 'smtp.a.com', servername: undefined });
+});
+
+test('systemResolveHost handles empty lookup results', async () => {
+  const resolveHost = systemResolveHost({ lookup: async () => [] });
+  assert.deepEqual(await resolveHost('smtp.a.com'), { host: 'smtp.a.com', servername: undefined });
 });
