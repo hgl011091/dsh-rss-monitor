@@ -42,6 +42,8 @@
 - **客户端同步** — 浏览器端改用 `connection.rpc.call('/api', 'dsh-rss-monitor.<端点>', …)`，与其它正常工作的设置标签页走同一条传输。
 - **宿主版本声明** — `peerDependencies` 补充 `@deepseek-ai/dsh-host-webserver` 兼容版本（含 0.1.5-rc.1），商店的宿主要求检查不再告警。
 
+> **宿主要求（v0.2.10 起精确声明）**：`engines.dsh >= 0.1.2-rc.1`——DSH Desktop 2.0.9（内嵌 host 0.1.5-rc.1）实测可用。0.1.2-rc.1 是 `dsh-client-connection` 引入 Fetch 路由 API（本插件传输层所依赖、同时移除 `rpc.handle`）的版本，经 npm 逐版本核实；更老的 0.1.0/0.1.1 线宿主无法运行，市场会在安装前直接拦截。另注：市场侧的清单事实有 24 小时缓存（`profiles\desktop\.dsh-market\discovery-compatibility-v1.json`），发布新版本后若商店显示未刷新，删除该缓存文件并重启 DSH 即可。
+
 > 升级提示：从 ≤0.2.8 升级请**先完全退出 DSH Desktop** 再安装，重启后强刷页面（Ctrl+Shift+R）。
 
 ## 🆕 v0.2.0 新增
@@ -93,7 +95,7 @@
 
 ```bash
 # DSH Desktop（务必带 @精确版本 + --save-exact，见下方 ⚠）
-dsh plugin --profile desktop add -wE "dsh-rss-monitor@0.2.9"
+dsh plugin --profile desktop add -wE "dsh-rss-monitor@0.2.10"
 
 # DSH Web
 dsh plugin --profile web add dsh-rss-monitor
@@ -103,8 +105,8 @@ dsh plugin --profile web add dsh-rss-monitor
 
 > ⚠️ **Desktop 专属坑：依赖必须是精确版本。** 桌面端的 bundle 加载器只解析 `dsh.profile.bundles` 中**精确版本**的 profile 依赖：pnpm 默认写入的 `^0.2.9` 范围值会被**静默跳过**——装完、重启都不生效，且无任何报错。所以请：
 > 1. 安装时带 `@0.2.9` 并加 `-E`（`--save-exact`）；
-> 2. 装完自查：打开 `%USERPROFILE%\.dsh\profiles\desktop\package.json`，`dependencies` 里应是 `"dsh-rss-monitor": "0.2.9"`（**没有** `^`），且 `dsh.profile.bundles` 数组里含 `"dsh-rss-monitor"`；
-> 3. 若版本带 `^`，用 `pnpm remove -w dsh-rss-monitor` 再 `pnpm add -wE "dsh-rss-monitor@0.2.9"` 重装（需先完全退出 DSH）。
+> 2. 装完自查：打开 `%USERPROFILE%\.dsh\profiles\desktop\package.json`，`dependencies` 里应是 `"dsh-rss-monitor": "0.2.10"`（**没有** `^`），且 `dsh.profile.bundles` 数组里含 `"dsh-rss-monitor"`；
+> 3. 若版本带 `^`，用 `pnpm remove -w dsh-rss-monitor` 再 `pnpm add -wE "dsh-rss-monitor@0.2.10"` 重装（需先完全退出 DSH）。
 
 ### 方式二：GitHub 源安装（需直连 GitHub）
 
