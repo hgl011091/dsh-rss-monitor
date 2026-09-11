@@ -31,6 +31,19 @@
 | 🔐 | **凭据安全** | SMTP 密码只存 Harness 凭据库（`DSH_RSS_SMTP_PASS_*`），配置文件中仅存引用 `passRef`，界面与磁盘均不见明文 |
 | 🆕 | **🗓️ 时间窗口** | 自定义每周定时监控——按星期 + 时间段触发 |
 
+## 🆕 v0.2.9 兼容性修复
+
+本版本修掉了两个让设置页完全不可用的传输层问题（症状：加载报 `cannot get property "webServer" without inject`，或点任何按钮报 `transport failure for /dsh-rss-monitor/<端点>: HTTP 405`）：
+
+- **RPC 挂载方式重构** — 不再用插件自定义通道 `connection.rpc.handle('/dsh-rss-monitor', …)`，改为在**共享 `/api` 通道**下按端点注册精确 Fetch 路由（`/api/dsh-rss-monitor.<端点>`，共 11 条）。原因有三：
+  1. 注册自定义通道会在 dsh-client-connection 内部触及 `webServer` 服务；桌面端加载器直接应用条目、**忽略模块级 `inject` 声明**，所以服务未就绪时直接加载失败；
+  2. 当前桌面版本上，发往插件自定义通道的浏览器请求可能落进静态前端兜底（对 POST 一律回 **405**）；
+  3. `connection.fetch.register` 完全不依赖 `webServer`，没有任何启动时序竞争；精确路由优先于内置网关拦截器，且与其它设置页共用同一套浏览器认证围栏。
+- **客户端同步** — 浏览器端改用 `connection.rpc.call('/api', 'dsh-rss-monitor.<端点>', …)`，与其它正常工作的设置标签页走同一条传输。
+- **宿主版本声明** — `peerDependencies` 补充 `@deepseek-ai/dsh-host-webserver` 兼容版本（含 0.1.5-rc.1），商店的宿主要求检查不再告警。
+
+> 升级提示：从 ≤0.2.8 升级请**先完全退出 DSH Desktop** 再安装，重启后强刷页面（Ctrl+Shift+R）。
+
 ## 🆕 v0.2.0 新增
 
 - **🗓️ 时间区间（按星期 + 时间段）** — 自由勾选星期、设置开始/结束时间，仅在窗口期内执行 RSS 检查与邮件通知
@@ -80,7 +93,7 @@
 
 ```bash
 # DSH Desktop（务必带 @精确版本 + --save-exact，见下方 ⚠）
-dsh plugin --profile desktop add -wE "dsh-rss-monitor@0.2.2"
+dsh plugin --profile desktop add -wE "dsh-rss-monitor@0.2.9"
 
 # DSH Web
 dsh plugin --profile web add dsh-rss-monitor
@@ -88,10 +101,10 @@ dsh plugin --profile web add dsh-rss-monitor
 
 完成后启动 DSH Desktop（或刷新 `dsh web` 页面），设置 → "RSS 监控"。
 
-> ⚠️ **Desktop 专属坑：依赖必须是精确版本。** 桌面端的 bundle 加载器只解析 `dsh.profile.bundles` 中**精确版本**的 profile 依赖：pnpm 默认写入的 `^0.2.2` 范围值会被**静默跳过**——装完、重启都不生效，且无任何报错。所以请：
-> 1. 安装时带 `@0.2.2` 并加 `-E`（`--save-exact`）；
-> 2. 装完自查：打开 `%USERPROFILE%\.dsh\profiles\desktop\package.json`，`dependencies` 里应是 `"dsh-rss-monitor": "0.2.2"`（**没有** `^`），且 `dsh.profile.bundles` 数组里含 `"dsh-rss-monitor"`；
-> 3. 若版本带 `^`，用 `pnpm remove -w dsh-rss-monitor` 再 `pnpm add -wE "dsh-rss-monitor@0.2.2"` 重装（需先完全退出 DSH）。
+> ⚠️ **Desktop 专属坑：依赖必须是精确版本。** 桌面端的 bundle 加载器只解析 `dsh.profile.bundles` 中**精确版本**的 profile 依赖：pnpm 默认写入的 `^0.2.9` 范围值会被**静默跳过**——装完、重启都不生效，且无任何报错。所以请：
+> 1. 安装时带 `@0.2.9` 并加 `-E`（`--save-exact`）；
+> 2. 装完自查：打开 `%USERPROFILE%\.dsh\profiles\desktop\package.json`，`dependencies` 里应是 `"dsh-rss-monitor": "0.2.9"`（**没有** `^`），且 `dsh.profile.bundles` 数组里含 `"dsh-rss-monitor"`；
+> 3. 若版本带 `^`，用 `pnpm remove -w dsh-rss-monitor` 再 `pnpm add -wE "dsh-rss-monitor@0.2.9"` 重装（需先完全退出 DSH）。
 
 ### 方式二：GitHub 源安装（需直连 GitHub）
 
@@ -203,7 +216,7 @@ dsh-rss-monitor/
 │  ├─ feed-fetcher.mjs  #   rss-parser 包装 + 缩略图提取
 │  ├─ email-notifier.mjs#   nodemailer 包装（验证 + 重试）
 │  ├─ schedule-window.mjs # 时间窗口判定（按星期 + 时间段）
-│  └─ rpc.mjs           #   RPC 通道安装与错误信标
+│  └─ rpc.mjs           #   RPC 安装：共享 /api 通道下的精确 Fetch 路由（11 条）
 ├─ plugin-src/host/     # Host 插件入口（inject: connection, credentials） esbuild 构建
 ├─ plugin-src/client/   # React 设置页（slots/locale/样式/i18n） esbuild 构建
 ├─ lib/                 # 构建产物：index.js（Host, ESM node22）、client.js（Client, CJS）

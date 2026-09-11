@@ -12,6 +12,13 @@ import { installRssRpc } from '../../src/rpc.mjs';
 import { RssStateStore } from '../../src/state-store.mjs';
 
 export const name = 'dsh-rss-monitor-host';
+// The settings RPC mounts as exact Fetch routes under the shared `/api`
+// channel (see src/rpc.mjs). Installing them only touches the connection
+// service (`ctx.connection.fetch.register`), never webServer, so no extra
+// inject is required and the mount cannot race the web stack's startup.
+// Note: the desktop loader applies entries directly and ignores this
+// module-level array for gating — keep apply() free of any service access
+// that is not provided by this list.
 export const inject = ['connection', 'credentials'];
 
 /** Resolve the plugin's data directory under DSH_HOME. */
@@ -89,12 +96,12 @@ export function createRssHostPlugin(internals = {}) {
       monitorHolder.current = controller;
 
       let rpcDisposer = null;
-      if (ctx?.connection?.rpc) {
+      if (ctx?.connection?.fetch) {
         rpcDisposer = internals.installRpc
           ? internals.installRpc(ctx, controller, config)
           : installRssRpc(ctx, controller, config);
       } else {
-        logger?.warn?.('[dsh-rss-monitor] connection.rpc unavailable; settings page will not reach this host');
+        logger?.warn?.('[dsh-rss-monitor] connection.fetch unavailable; settings page will not reach this host');
       }
 
       await (internals.initialize ?? (() => controller.initialize()))();

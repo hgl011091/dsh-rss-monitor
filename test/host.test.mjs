@@ -15,10 +15,10 @@ import { RssStateStore } from '../src/state-store.mjs';
 
 function createMockCtx(logger) {
   const effects = [];
-  const rpcHandles = [];
+  const fetchRoutes = [];
   return {
     effects,
-    rpcHandles,
+    fetchRoutes,
     ctx: {
       logger: logger ?? {
         info() {},
@@ -26,12 +26,12 @@ function createMockCtx(logger) {
         error() {},
       },
       connection: {
-        rpc: {
-          handle: (channel, handler, options) => {
-            rpcHandles.push({ channel, handler, options });
+        fetch: {
+          register: (route) => {
+            fetchRoutes.push(route);
             return () => {
-              const index = rpcHandles.findIndex((entry) => entry.channel === channel);
-              if (index >= 0) rpcHandles.splice(index, 1);
+              const index = fetchRoutes.indexOf(route);
+              if (index >= 0) fetchRoutes.splice(index, 1);
             };
           },
         },
@@ -82,7 +82,7 @@ test('createRssHostPlugin apply wires rpc, monitor, and effect cleanup', async (
     }), 'utf8');
     await writeFile(statePath, JSON.stringify({ version: 1 }), 'utf8');
 
-    const { ctx, effects, rpcHandles } = createMockCtx();
+    const { ctx, effects, fetchRoutes } = createMockCtx();
     const plugin = createRssHostPlugin({
       configStore: await new RssConfigStore(configPath).load(),
       stateStore: await new RssStateStore(statePath).load(),
@@ -91,25 +91,34 @@ test('createRssHostPlugin apply wires rpc, monitor, and effect cleanup', async (
     });
     await plugin.apply(ctx, { dataDir: directory });
 
-    assert.equal(rpcHandles.length, 1);
-    assert.equal(rpcHandles[0].channel, '/dsh-rss-monitor');
-    assert.deepEqual(rpcHandles[0].options, { authority: 'loopback' });
-    assert.equal(typeof rpcHandles[0].handler, 'function');
+    assert.equal(fetchRoutes.length, 11);
+    assert.ok(fetchRoutes.every((route) => route.path.startsWith('/api/dsh-rss-monitor.')));
+    assert.ok(fetchRoutes.every((route) => typeof route.fetch === 'function'));
     assert.equal(effects.length, 1);
     assert.equal(effects[0].label, 'dsh-rss-monitor: stop monitor and release rpc');
 
-    const status = await rpcHandles[0].handler('status', {});
-    assert.equal(status.ok, true);
-    assert.equal(status.value.enabled, false);
-    assert.equal(status.value.feeds.length, 0);
+    const statusRoute = fetchRoutes.find((route) => route.path === '/api/dsh-rss-monitor.status');
+    const call = (body) => statusRoute.fetch(new Request('http://127.0.0.1:43120/api/dsh-rss-monitor.status', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    }));
+    const response = await call({ type: 'client-request', rpcId: 'test-1', method: 'dsh-rss-monitor.status', payload: {} });
+    assert.equal(response.status, 200);
+    const envelope = await response.json();
+    assert.equal(envelope.type, 'server-response');
+    assert.equal(envelope.rpcId, 'test-1');
+    assert.equal(envelope.result.ok, true);
+    assert.equal(envelope.result.value.enabled, false);
+    assert.equal(envelope.result.value.feeds.length, 0);
 
-    const bad = await rpcHandles[0].handler('feed.save', null);
-    assert.equal(bad.ok, false);
+    const bad = await call({ type: 'client-request', rpcId: 'test-2', method: 'dsh-rss-monitor.feed.save', payload: null });
+    assert.equal(bad.status, 400, 'a namespaced method aimed at another route is rejected before dispatch');
 
     for (const effect of effects) {
       await effect.fn()();
     }
-    assert.equal(rpcHandles.length, 0, 'disposal must release the rpc channel');
+    assert.equal(fetchRoutes.length, 0, 'disposal must release the /api fetch routes');
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -145,7 +154,7 @@ test('createRssHostPlugin restores an enabled monitor and accepts controller inj
       }
     }
 
-    const { ctx, effects, rpcHandles } = createMockCtx();
+    const { ctx, effects, fetchRoutes } = createMockCtx();
     const plugin = createRssHostPlugin({
       configStore: await new RssConfigStore(configPath).load(),
       stateStore: await new RssStateStore(statePath).load(),
@@ -178,11 +187,18 @@ test('createRssHostPlugin restores an enabled monitor and accepts controller inj
       installRpc: installRssRpc,
     });
     await customPlugin.apply(ctx, { dataDir: directory });
-    assert.equal(rpcHandles.length, 1);
+    assert.equal(fetchRoutes.length, 11);
     assert.equal(effects.length, 1);
-    const result = await rpcHandles[0].handler('check.now', {});
-    assert.equal(result.ok, true);
-    assert.equal(result.value.checkedFeeds, 1);
+    const checkRoute = fetchRoutes.find((route) => route.path === '/api/dsh-rss-monitor.check.now');
+    const response = await checkRoute.fetch(new Request('http://127.0.0.1:43120/api/dsh-rss-monitor.check.now', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'client-request', rpcId: 'test-3', method: 'dsh-rss-monitor.check.now', payload: {} }),
+    }));
+    assert.equal(response.status, 200);
+    const envelope = await response.json();
+    assert.equal(envelope.result.ok, true);
+    assert.equal(envelope.result.value.checkedFeeds, 1);
     for (const effect of effects) {
       await effect.fn()();
     }

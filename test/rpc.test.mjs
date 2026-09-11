@@ -132,43 +132,91 @@ test('handler rejects non-record payloads and keeps cancellation first', async (
   assert.equal(abortedUnknown.error.code, 'cancelled');
 });
 
-test('installRssRpc registers the handler with loopback authority by default', () => {
+test('installRssRpc mounts one exact /api Fetch route per endpoint', () => {
   const { controller } = buildController();
-  const calls = [];
+  const routes = [];
   const ctx = {
     connection: {
-      rpc: {
-        handle: (channel, handler, options) => {
-          calls.push({ channel, handler, options });
-          return () => calls.pop();
+      fetch: {
+        register: (route) => {
+          routes.push(route);
+          return () => {
+            const index = routes.indexOf(route);
+            if (index >= 0) routes.splice(index, 1);
+          };
         },
       },
     },
   };
   const dispose = installRssRpc(ctx, controller);
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].channel, RSS_RPC_CHANNEL);
-  assert.deepEqual(calls[0].options, { authority: 'loopback' });
-  assert.equal(typeof calls[0].handler, 'function');
+  assert.equal(routes.length, Object.keys(ENDPOINTS).length);
+  assert.equal(routes.length, 11);
+  for (const route of routes) {
+    assert.match(route.path, /^\/api\/dsh-rss-monitor\.[A-Za-z0-9_$.~-]+$/);
+    assert.deepEqual(route.methods, ['POST']);
+    assert.equal(route.requestBodyMode, 'buffered');
+    assert.equal(typeof route.fetch, 'function');
+  }
   dispose();
-  assert.equal(calls.length, 0);
+  assert.equal(routes.length, 0);
 });
 
-test('installRssRpc forwards a custom authority and rejects reserved channels', () => {
+test('installRssRpc routes answer standard client-request envelopes on /api', async () => {
   const { controller } = buildController();
-  const calls = [];
+  const routes = [];
   const ctx = {
     connection: {
-      rpc: {
-        handle: (channel, handler, options) => {
-          calls.push({ channel, options });
+      fetch: {
+        register: (route) => {
+          routes.push(route);
           return () => {};
         },
       },
     },
   };
-  installRssRpc(ctx, controller, { authority: 'trusted-host' });
-  assert.deepEqual(calls[0].options, { authority: 'trusted-host' });
+  installRssRpc(ctx, controller);
+  const route = routes.find((entry) => entry.path === '/api/dsh-rss-monitor.status');
+  const url = 'http://127.0.0.1:43120/api/dsh-rss-monitor.status';
+  const call = (body) => route.fetch(new Request(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  }));
+
+  const ok = await call({ type: 'client-request', rpcId: 'rpc-1', method: 'dsh-rss-monitor.status', payload: {} });
+  assert.equal(ok.status, 200);
+  const envelope = await ok.json();
+  assert.equal(envelope.type, 'server-response');
+  assert.equal(envelope.rpcId, 'rpc-1');
+  assert.equal(envelope.result.ok, true);
+  assert.equal(envelope.result.value.feeds.length, 1);
+
+  // Method sent to the wrong route: rejected before dispatch.
+  const mismatched = await call({ type: 'client-request', rpcId: 'rpc-2', method: 'other.status', payload: {} });
+  assert.equal(mismatched.status, 400);
+
+  // Non-JSON body: rejected before dispatch.
+  const junk = await route.fetch(new Request(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: 'not json',
+  }));
+  assert.equal(junk.status, 400);
+
+  // A namespaced method on its own route dispatches across endpoints too.
+  const saveRoute = routes.find((entry) => entry.path === '/api/dsh-rss-monitor.feed.save');
+  const dispatched = await saveRoute.fetch(new Request('http://127.0.0.1:43120/api/dsh-rss-monitor.feed.save', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ type: 'client-request', rpcId: 'rpc-3', method: 'dsh-rss-monitor.feed.save', payload: { feed: { id: 'x' } } }),
+  }));
+  assert.equal(dispatched.status, 200);
+  const saved = await dispatched.json();
+  assert.equal(saved.result.ok, true);
+});
+
+test('the RPC namespace stays out of the reserved /api identity', () => {
+  assert.equal(RSS_RPC_CHANNEL, '/dsh-rss-monitor');
   assert.match(RSS_RPC_CHANNEL, /^\/[A-Za-z0-9._~-]+$/, 'channel must satisfy the Harness pattern');
   assert.notEqual(RSS_RPC_CHANNEL, '/api');
   assert.ok(LIMITS.smtpPassRefPattern.source.endsWith('{24}$'), 'passRef pattern must require 24 hex chars');

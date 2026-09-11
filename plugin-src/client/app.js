@@ -757,7 +757,7 @@ function SettingsPanel({ status, busy, run, rpc, confirmAction }) {
   ];
 }
 
-export function RssSettingsTab({ rpcCall, version = '0.2.8' }) {
+export function RssSettingsTab({ rpcCall, version = '0.2.9' }) {
   const [status, setStatus] = React.useState(() => lastKnownStatus ?? normalizeStatus(null));
   const [view, setView] = React.useState('overview');
   const [notice, setNotice] = React.useState(null);

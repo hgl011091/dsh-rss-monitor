@@ -1,4 +1,7 @@
-import { RSS_RPC_CHANNEL } from './protocol.mjs';
+import { RSS_RPC_CHANNEL, RSS_RPC_ENDPOINTS } from './protocol.mjs';
+
+/** Method namespace under the shared `/api` channel, derived from the channel name. */
+export const API_METHOD_PREFIX = `${RSS_RPC_CHANNEL.slice(1)}.`;
 
 /**
  * Creates the dsh-rss-monitor RPC handler. Every request is validated (known
@@ -38,11 +41,55 @@ export function createRssRpcHandler(controller) {
 }
 
 /**
- * Install the handler on the Harness connection. Defaults to loopback
- * authority (matching dsh-im) so only the local browser can call the
- * management surface; pass `authority: 'trusted-host'` to widen it.
+ * Mount the management surface as exact Fetch routes under the shared
+ * `/api` channel — one route per endpoint, `/api/dsh-rss-monitor.<endpoint>`.
+ *
+ * Why not `connection.rpc.handle(RSS_RPC_CHANNEL, ...)`: registering a
+ * custom channel touches the webServer service inside dsh-client-connection
+ * (`owner.webServer.register(route)`), which fails at apply time unless
+ * webServer is already provided ("cannot get property \"webServer\"
+ * without inject" — the desktop loader applies entries directly and ignores
+ * module-level inject for gating), and on current desktop builds browser
+ * requests to plugin channels can fall through to the static-frontend
+ * fallback and fail with HTTP 405. Exact `/api` routes win over the
+ * built-in gateway interceptor, ride the same browser-auth fence as every
+ * other settings tab, and `connection.fetch.register` never touches
+ * webServer, so there is nothing left to race.
+ *
+ * The browser client calls the shared channel with the namespaced method
+ * (`rpc.call('/api', 'dsh-rss-monitor.<endpoint>', ...)`), which POSTs
+ * `/api/dsh-rss-monitor.<endpoint>` with the standard client-request
+ * envelope; the route validates it, dispatches to the controller, and
+ * answers with the standard server-response envelope. Access control is
+ * inherited from the shared `/api` route (browser-auth fence), so the old
+ * `authority` option is accepted for compatibility but no longer has any
+ * effect.
+ *
  * Returns the disposer.
  */
-export function installRssRpc(ctx, controller, { authority = 'loopback' } = {}) {
-  return ctx.connection.rpc.handle(RSS_RPC_CHANNEL, createRssRpcHandler(controller), { authority });
+export function installRssRpc(ctx, controller, _options = {}) {
+  const dispatch = createRssRpcHandler(controller);
+  const routes = Object.values(RSS_RPC_ENDPOINTS).map((endpoint) =>
+    ctx.connection.fetch.register({
+      path: `/api/${API_METHOD_PREFIX}${endpoint}`,
+      methods: ['POST'],
+      requestBodyMode: 'buffered',
+      fetch: async (request) => {
+        let envelope;
+        try {
+          envelope = await request.json();
+        } catch {
+          return new Response('body is not JSON', { status: 400 });
+        }
+        if (!envelope || typeof envelope !== 'object' || envelope.type !== 'client-request'
+          || typeof envelope.rpcId !== 'string' || envelope.method !== `${API_METHOD_PREFIX}${endpoint}`) {
+          return new Response('invalid client-request', { status: 400 });
+        }
+        const result = await dispatch(endpoint, envelope.payload ?? {}, request.signal);
+        return Response.json({ type: 'server-response', rpcId: envelope.rpcId, result });
+      },
+    }));
+  return () => {
+    for (const dispose of routes) dispose();
+  };
 }

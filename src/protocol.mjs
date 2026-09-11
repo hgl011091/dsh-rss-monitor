@@ -9,7 +9,10 @@
 
 export const RSS_PROTOCOL_VERSION = 'dsh-rss-monitor.v1';
 
-// Channel names must match the Harness connection service pattern
+// The channel name doubles as the method namespace under the shared `/api`
+// transport: the host mounts exact routes `/api/dsh-rss-monitor.<endpoint>`
+// and the client calls rpc.call('/api', 'dsh-rss-monitor.<endpoint>', ...).
+// The name must match the Harness connection service pattern
 // /^\/[A-Za-z0-9._~-]+$/ (leading slash; "/api" is reserved).
 export const RSS_RPC_CHANNEL = '/dsh-rss-monitor';
 

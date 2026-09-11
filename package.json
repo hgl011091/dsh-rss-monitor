@@ -1,7 +1,7 @@
 {
   "name": "dsh-rss-monitor",
-  "version": "0.2.8",
-  "description": "RSS 订阅监控插件：定时检查 RSS 源、关键词过滤、邮件通知，并以原生设置页接入 DeepSeek Harness。 Monitor RSS feeds on a schedule, filter by keywords, and get email notifications, as a native DeepSeek Harness settings page. v0.2.8 fixes email delivery under TUN-mode proxies (nodemailer's c-ares queryA ETIMEOUT; SMTP hosts are now pre-resolved via the OS resolver with TLS SNI preserved) and fixes the stale client bundle that made the settings tab show v0.2.6 after installing 0.2.7 (build guard + prepack rebuild added). v0.2.6 fixed the hardcoded client version and made the build track package.json. v0.2.5 ships a pure ESM lib/index.js (rss-parser and nodemailer are real ESM dependencies instead of bundled CJS).",
+  "version": "0.2.9",
+  "description": "RSS 订阅监控插件：定时检查 RSS 源、关键词过滤、邮件通知，并以原生设置页接入 DeepSeek Harness。 Monitor RSS feeds on a schedule, filter by keywords, and get email notifications, as a native DeepSeek Harness settings page. v0.2.9 mounts the settings RPC as exact Fetch routes under the shared /api channel (/api/dsh-rss-monitor.<endpoint>): dsh-client-connection exposes fetch.register without touching webServer, which fixes the load failure \"cannot get property \\\"webServer\\\" without inject\" (the desktop loader ignores module-level inject), and browser requests ride the same authenticated /api transport as every other settings tab instead of plugin channels that can fall through to the static-frontend fallback (HTTP 405). v0.2.8 fixed email delivery under TUN-mode proxies (nodemailer c-ares queryA ETIMEOUT; SMTP hosts pre-resolved via the OS resolver with TLS SNI preserved) and added a client bundle version guard + prepack rebuild.",
   "keywords": [
     "deepseek-harness",
     "dsh",
@@ -59,7 +59,20 @@
     "prepack": "npm run build && node test/client-bundle.test.mjs"
   },
   "engines": {
-    "node": ">=22.19"
+    "node": ">=22.19",
+    "dsh": "*"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-host-webserver": "0.1.0-rc.6 || 0.1.0-rc.7 || 0.1.0-rc.8 || 0.1.1-rc.1 || 0.1.1-rc.2 || 0.1.5-rc.1"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-host-webserver": {
+      "optional": true
+    }
   },
   "dependencies": {
     "nodemailer": "^6.9.16",
